@@ -571,6 +571,14 @@ function creerGraph() {
   const lier = (a, b) => a.timeScale().subscribeVisibleLogicalRangeChange(r => { if (r && !sync) { sync = true; b.timeScale().setVisibleLogicalRange(r); sync = false; } });
   lier(chart, rsiChart); lier(rsiChart, chart);
   chart.subscribeClick(clicGraph);
+  // page chargée cachée (onglet ou panneau masqué) : le graphique n'avait pas de largeur pour se centrer, on recentre
+  // dès qu'il en a une
+  let largeur = document.getElementById("graph").getBoundingClientRect().width;
+  new ResizeObserver(e => {
+    const w = e[0].contentRect.width;
+    if (largeur < 120 && w >= 120 && etat.a && temps.length) requestAnimationFrame(() => requestAnimationFrame(centrer));
+    largeur = w;
+  }).observe(document.getElementById("graph"));
 }
 function couleursGraph() {
   if (!chart) return;
