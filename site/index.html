@@ -737,7 +737,8 @@ function legende() {
   if (etat.calques.fvg) items.push(`<span><i style="background:${tok("--fvg-h")}"></i>FVG ${tfn(etat.tf)} pas encore comblées (${D.config.affichage.fvg_max} au plus)</span>`);
   if (etat.calques.ema) D.config.general.emas.forEach(k => items.push(`<span><i style="background:${couleurEma(k)};height:2px"></i>EMA ${k}</span>`));
   if (etat.calques.toutes) items.push(`<span>▲▼ setups · ● pré-alertes : clique dessus pour les ouvrir</span>`);
-  items.push(`<span class="num">Heures de Paris · bougies ${tfn(etat.tf)}</span>`);
+  const src = (D.meta.sources_bas_tf || {})[etat.tf];
+  items.push(`<span class="num">Heures de Paris · bougies ${tfn(etat.tf)}${src && /spot/i.test(src) ? " (Binance spot : perp injoignable)" : ""}</span>`);
   el.innerHTML = items.join("");
 }
 function clicGraph(param) {
