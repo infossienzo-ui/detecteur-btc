@@ -159,10 +159,11 @@ def _utc(t):
     return t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
 
 
-def recuperer(tf, debut, fin):
-    """Première source qui répond. Renvoie (DataFrame des bougies clôturées, index UTC sans fuseau ; nom de la source)."""
+def recuperer(tf, debut, fin, perp_seulement=False):
+    """Première source qui répond. Renvoie (DataFrame des bougies clôturées, index UTC sans fuseau ; nom de la source).
+    perp_seulement : jamais de bougies spot (l'historique du détecteur ne doit contenir que le perp)."""
     debut, fin = _utc(debut), _utc(fin)
-    for nom, f in SOURCES:
+    for nom, f in (SOURCES[:2] if perp_seulement else SOURCES):
         try:
             d = f(tf, debut, fin)
             if d is not None and len(d):
@@ -179,7 +180,7 @@ def mettre_a_jour_h1(hist, etat, maintenant):
     """Ajoute les bougies 1h clôturées manquantes. Le volume de Coinalyze est remis à l'échelle de celui de Binance."""
     dernier = hist.index.max()
     debut = dernier - pd.Timedelta(hours=72)
-    d, source = recuperer("H1", debut, maintenant)
+    d, source = recuperer("H1", debut, maintenant, perp_seulement=True)
     if d is None:
         return hist, None, etat.get("facteur_volume", 1.0)
     facteur = etat.get("facteur_volume", 1.0)
@@ -287,16 +288,17 @@ def main():
     log(f"   {nb} alerte(s) envoyée(s) sur Telegram")
 
     # bougies 1m à 30m pour le graphique (non conservées dans le dépôt)
-    bas = {}
+    bas, sources_bas = {}, {}
     for tf, j in JOURS_BAS_TF.items():
         d, s = recuperer(tf, maintenant - pd.Timedelta(days=j), maintenant)
         if d is not None:
             if s and s.startswith("Coinalyze"):
                 d["volume"] = d["volume"] * facteur
-            bas[tf] = d
+            bas[tf], sources_bas[tf] = d, s
     freq = export_web.frequence(alertes, int(debut.value), fin_ns)
     meta = {"maquette": False, "derniere_verification": int(maintenant.value // NS), "depot": depot, "url": url,
-            "source": source or "aucune source joignable à cette vérification (historique inchangé)",
+            "source": source or "aucune source perp joignable à cette vérification (historique inchangé)",
+            "sources_bas_tf": sources_bas,
             "message_absents": "Bougies indisponibles à cette vérification : la source n'a pas répondu."}
     export_web.ecrire_tout(M, alertes, int((h1.index[-1] - pd.Timedelta(days=365)).value), fin_ns, cfg, freq,
                            str(DOSSIER_SITE), meta["source"], meta_extra=meta, bas_tf=bas)
