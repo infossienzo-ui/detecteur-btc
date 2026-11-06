@@ -1,0 +1,64 @@
+name: Détecteur BTC
+
+# Toutes les heures, 2 minutes après l'heure pleine (GitHub peut retarder de quelques minutes), et à la demande.
+on:
+  schedule:
+    - cron: "2 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: detecteur
+  cancel-in-progress: false
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer
+        run: pip install -r requirements.txt
+
+      - name: Détecter et envoyer les alertes
+        env:
+          COINALYZE_API_KEY: ${{ secrets.COINALYZE_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: python scripts/maj.py
+
+      - name: Enregistrer les nouvelles bougies et l'état
+        run: |
+          git config user.name "detecteur-btc"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/h1 etat/etat.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Vérification du $(date -u +'%Y-%m-%d %H:%M') UTC"
+            for essai in 1 2 3; do
+              git pull --rebase --quiet && git push --quiet && break
+              sleep 5
+            done
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploiement
+        uses: actions/deploy-pages@v4

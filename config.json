@@ -1,0 +1,163 @@
+{
+ "general": {
+  "symbole": "BTCUSDT",
+  "swing_n": 2,
+  "emas": [
+   8,
+   21,
+   50,
+   200
+  ],
+  "ema_declencheurs": [
+   21,
+   50
+  ],
+  "ema_lente": 50,
+  "rsi_periode": 14,
+  "rsi_haut": 70,
+  "rsi_bas": 30,
+  "atr_periode": 14
+ },
+ "niveaux": {
+  "auto": false
+ },
+ "profil": {
+  "jours": {
+   "M1": 0.2083,
+   "M5": 0.625,
+   "M15": 2,
+   "M30": 3.75,
+   "H1": 8,
+   "H2": 12,
+   "H3": 15,
+   "H4": 18,
+   "H5": 21,
+   "H6": 25,
+   "H8": 28,
+   "H12": 40,
+   "D": 75
+  },
+  "source": "barres",
+  "value_area": 0.7,
+  "niveaux": 20
+ },
+ "strat1": {
+  "actif": true,
+  "tf_contexte": [
+   "H4",
+   "H6",
+   "D"
+  ],
+  "tf_declencheurs": [
+   "H1",
+   "H2",
+   "H4"
+  ],
+  "zones": {
+   "OB": true,
+   "FVG": true,
+   "Fibo": true,
+   "Profil": true,
+   "EMA50": true
+  },
+  "fibo_niveaux": [
+   0.382,
+   0.5,
+   0.618,
+   0.65,
+   0.705,
+   1.0
+  ],
+  "fibo_golden": [
+   0.618,
+   0.65
+  ],
+  "fibo_epaisseur_atr": 0.1,
+  "fvg_min_atr": 0.1,
+  "fvg_comble": "meches",
+  "ema_zone_atr": 0.1,
+  "ob_corps": false,
+  "ob_recherche": 10,
+  "zones_max_par_type": 4,
+  "declencheurs": {
+   "reclaim": true,
+   "rejet": true,
+   "drapeau": true,
+   "divergence": true,
+   "divergence_cachee": true,
+   "reprise_ema": true
+  },
+  "pinbar_meche": 0.5,
+  "reprise_ema_tf_min": "H2",
+  "filtre_rr": {
+   "actif": false,
+   "seuil": 1.0
+  },
+  "risque_min_atr": 0.5
+ },
+ "strat2": {
+  "actif": true,
+  "tf_declencheurs": [
+   "H1",
+   "H2",
+   "H4"
+  ],
+  "contre_tendance_d1": true,
+  "zones_htf": {
+   "profil_tf": [
+    "H4",
+    "H6",
+    "D"
+   ],
+   "range": true,
+   "pdh_pdl": true
+  },
+  "tol_zone_atr_h4": 0.25,
+  "percage_max_atr_h4": 1.0,
+  "range": {
+   "jours_min": 3,
+   "tol_atr_h4": 0.5,
+   "fenetre_jours": 30,
+   "largeur_min_atr_h4": 2.0
+  },
+  "declencheurs": {
+   "divergence": true,
+   "divergence_cachee": true,
+   "choch": true,
+   "wedge": true
+  },
+  "attente_barres": 24,
+  "filtre_rr": {
+   "actif": false,
+   "seuil": 2.0
+  },
+  "grade_a_superposition": false
+ },
+ "divergence": {
+  "ecart_min": 5,
+  "ecart_max": 60
+ },
+ "drapeau": {
+  "alerte": "retest",
+  "retest_barres": 10,
+  "retest_tol_atr": 0.1,
+  "wedge_fenetre": 30
+ },
+ "pre_alertes": {
+  "actif": true,
+  "prix_dans_zone": true,
+  "cassure_attente_retest": true,
+  "sweep_attente": true
+ },
+ "alertes": {
+  "suivi_jours": 10,
+  "pre_alerte_heures": 48
+ },
+ "affichage": {
+  "fvg_max": 50,
+  "rsi_zones": [
+   70,
+   30
+  ]
+ }
+}

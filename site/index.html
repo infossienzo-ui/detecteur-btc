@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Détecteur BTC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : barre d'en-tête, puis liste des alertes à gauche et graphique + fiche à droite ; sur téléphone,
+   l'alerte ouverte (graphique puis fiche) passe en premier et la liste en dessous. */
+:root {
+  --bg: #eef0f3; --panel: #ffffff; --panel-2: #f6f7f9; --ink: #161b24; --muted: #5b6474; --line: #dbe0e7; --grid: #eef1f5;
+  --accent: #2b59c3; --accent-ink: #ffffff;
+  --long: #0f8a5f; --short: #cf3a3a; --prepa: #b57a06; --setup: #0f8a5f;
+  --z-ob: #7c5cd6; --z-fvg: #0f9f94; --z-fibo: #c99312; --z-poc: #d9a400; --z-vah: #d64545; --z-val: #1f9d55;
+  --z-ema: #2f6fe0; --z-range: #6b7a90; --z-pd: #d9731f;
+  --ema8: #f08c00; --ema21: #1f9d55; --ema50: #2f6fe0; --ema200: #8e44c9; --rsi: #7a5ad8;
+  --fvg-h: rgba(34, 170, 90, .22); --fvg-b: rgba(220, 60, 60, .20); --moi: #0b72d9;
+  --f-titre: "Archivo Narrow", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-texte: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-chiffres: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1015; --panel: #141920; --panel-2: #191f28; --ink: #e6e9ef; --muted: #8d97a8; --line: #252c37; --grid: #1a2029;
+  --accent: #7097ff; --accent-ink: #0d1015; --long: #2fbf85; --short: #f0625f; --prepa: #f0b429; --setup: #2fbf85;
+  --z-ob: #9d83f0; --z-fvg: #2cc7ba; --z-fibo: #e0b23a; --z-poc: #f2c230; --z-vah: #ef6060; --z-val: #3fc47a;
+  --z-ema: #5b8ff0; --z-range: #8a99b0; --z-pd: #f08a3c;
+  --ema8: #f5a524; --ema21: #3fc47a; --ema50: #5b8ff0; --ema200: #b07ae8; --rsi: #a58bf5;
+  --fvg-h: rgba(63, 196, 122, .22); --fvg-b: rgba(240, 98, 95, .20); --moi: #4ea3ff;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0d1015; --panel: #141920; --panel-2: #191f28; --ink: #e6e9ef; --muted: #8d97a8; --line: #252c37; --grid: #1a2029;
+  --accent: #7097ff; --accent-ink: #0d1015; --long: #2fbf85; --short: #f0625f; --prepa: #f0b429; --setup: #2fbf85;
+  --z-ob: #9d83f0; --z-fvg: #2cc7ba; --z-fibo: #e0b23a; --z-poc: #f2c230; --z-vah: #ef6060; --z-val: #3fc47a;
+  --z-ema: #5b8ff0; --z-range: #8a99b0; --z-pd: #f08a3c;
+  --ema8: #f5a524; --ema21: #3fc47a; --ema50: #5b8ff0; --ema200: #b07ae8; --rsi: #a58bf5;
+  --fvg-h: rgba(63, 196, 122, .22); --fvg-b: rgba(240, 98, 95, .20); --moi: #4ea3ff;
+  color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-texte); font-size: 14px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+.gouttiere { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-family: var(--f-chiffres); font-variant-numeric: tabular-nums; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.barre { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+.barre-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding-block: 10px; }
+.marque { font-family: var(--f-titre); font-weight: 700; font-size: 20px; letter-spacing: .01em; display: flex; align-items: baseline; gap: 10px; }
+.marque small { font-family: var(--f-chiffres); font-weight: 400; font-size: 11px; color: var(--muted); letter-spacing: 0; }
+.onglets { display: flex; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+.onglets button { border: 0; background: transparent; padding: 5px 12px; border-radius: 6px; font-family: var(--f-titre); font-weight: 600; font-size: 14px; letter-spacing: .02em; color: var(--muted); }
+.onglets button[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.etat { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pastille { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); font-size: 11.5px; white-space: nowrap; }
+.pastille i { width: 7px; height: 7px; border-radius: 50%; background: var(--prepa); display: inline-block; }
+.pastille.direct i { background: var(--long); }
+.connexion { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.connexion h2 { font-family: var(--f-titre); font-size: 15px; margin: 0; }
+.connexion ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; }
+.connexion .ligne { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.connexion input { flex: 1 1 260px; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); font-family: var(--f-chiffres); font-size: 12.5px; }
+.msg-ok { color: var(--long); font-size: 13px; } .msg-ko { color: var(--short); font-size: 13px; }
+
+.vue { padding-block: 16px 40px; }
+.grille { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; align-items: start; }
+.liste { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); }
+.filtres { padding: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.puces { display: flex; flex-wrap: wrap; gap: 4px; }
+.puce { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
+.puce[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.compte { font-size: 12px; color: var(--muted); }
+.items { max-height: calc(100vh - 250px); overflow-y: auto; }
+.item { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 4px 10px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; background: var(--panel); width: 100%; text-align: left; }
+.item:hover { background: var(--panel-2); }
+.item[aria-current="true"] { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+.item .bande { border-radius: 4px; grid-row: span 2; }
+.item .l1 { font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.item .l2 { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.item .h { font-family: var(--f-chiffres); font-size: 11.5px; color: var(--muted); text-align: right; }
+.item .moi { font-size: 10.5px; color: var(--moi); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; font-weight: 500; }
+.plus { width: 100%; border: 0; background: var(--panel-2); padding: 10px; color: var(--accent); font-weight: 600; }
+.vide { padding: 20px 14px; color: var(--muted); font-size: 13px; }
+
+.detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.carte { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.titre-alerte { padding: 14px 16px 12px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.titre-alerte h1 { font-family: var(--f-titre); font-size: 22px; line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+.niveau { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-titre); font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; color: var(--accent-ink); }
+.niveau.setup { background: var(--setup); }
+.niveau.prepa { background: var(--prepa); }
+.sens-long { color: var(--long); } .sens-short { color: var(--short); }
+.sous { width: 100%; color: var(--muted); font-size: 13px; }
+.outils { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.groupe-tf { display: flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; width: fit-content; max-width: 100%; }
+.groupe-tf button { border: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 4px 8px; font-family: var(--f-chiffres); font-size: 12px; }
+.groupe-tf button:last-child { border-right: 0; }
+.groupe-tf button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.groupe-tf button.absent { color: var(--muted); }
+.calques { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); align-items: center; }
+.calques label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.profil-choix { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.profil-choix b { font-weight: 600; color: var(--ink); }
+.profil-choix .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.profil-choix .seg button { border: 0; border-right: 1px solid var(--line); background: var(--panel); padding: 3px 9px; font-size: 12px; }
+.profil-choix .seg button:last-child { border-right: 0; }
+.profil-choix .seg button[aria-pressed="true"] { background: var(--z-poc); color: #1b1600; font-weight: 600; }
+.zone-graph { position: relative; }
+#graph { height: min(560px, 62vh); min-height: 320px; }
+#rsi { height: 110px; border-top: 1px solid var(--line); }
+.voile { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; background: var(--panel); color: var(--muted); font-size: 14px; z-index: 3; }
+.voile b { color: var(--ink); display: block; font-family: var(--f-titre); font-size: 18px; margin-bottom: 6px; }
+.consigne { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 4; background: var(--moi); color: #fff; padding: 5px 12px; border-radius: 99px; font-size: 12.5px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.legende { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 12px 10px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); }
+.legende span { display: inline-flex; align-items: center; gap: 5px; }
+.legende i { width: 14px; height: 8px; border-radius: 2px; display: inline-block; }
+
+.fiche { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.bloc { padding: 12px 14px 14px; min-width: 0; }
+.bloc h2 { font-family: var(--f-titre); font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+.bloc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.bloc li { display: flex; gap: 8px; align-items: baseline; }
+.ok { color: var(--long); font-weight: 600; } .ko { color: var(--short); font-weight: 600; } .info { color: var(--muted); }
+.ligne-prix { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.ligne-prix:last-child { border-bottom: 0; }
+.etiq { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+.saisie { display: grid; grid-template-columns: minmax(0, 1fr) 110px 34px; gap: 6px; align-items: center; padding: 4px 0; }
+.saisie input { width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); font-family: var(--f-chiffres); font-size: 13px; }
+.saisie button { height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 14px; }
+.saisie button[aria-pressed="true"] { background: var(--moi); color: #fff; border-color: var(--moi); }
+.telegram { font-family: var(--f-chiffres); font-size: 12.5px; white-space: pre-wrap; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; line-height: 1.5; }
+.telegram a { color: var(--accent); }
+
+.page { max-width: 1060px; display: flex; flex-direction: column; gap: 14px; }
+.page h1 { font-family: var(--f-titre); font-size: 26px; margin: 0; }
+.page p { max-width: 70ch; margin: 0; color: var(--muted); }
+.tableau { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+th { font-family: var(--f-titre); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td.num { font-family: var(--f-chiffres); }
+tr.titre td { font-weight: 600; background: var(--panel-2); }
+.barre-pct { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-left: 6px; }
+.params { columns: 320px 3; column-gap: 12px; }
+.params fieldset { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin: 0 0 12px; padding: 12px 14px 14px; min-width: 0; display: flex; flex-direction: column; gap: 10px; break-inside: avoid; }
+.params legend { font-family: var(--f-titre); font-weight: 700; font-size: 15px; padding: 0 6px; }
+.champ { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.champ label { font-size: 13px; }
+.champ .aide { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); }
+.champ input[type=text] { width: 170px !important; }
+.champ input[type=number], .champ select, .champ input[type=text] { width: 110px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); font-family: var(--f-chiffres); font-size: 12.5px; }
+.champ.modifie label::after { content: " • modifié"; color: var(--prepa); font-size: 11px; }
+.multi { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.multi label { font-family: var(--f-chiffres); font-size: 11.5px; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; display: inline-flex; gap: 4px; align-items: center; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 14px; font-weight: 600; }
+.btn.prim { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.erreur { padding: 24px; color: var(--short); }
+
+@media (max-width: 900px) {
+  .grille { grid-template-columns: minmax(0, 1fr); }
+  .detail { order: 1; } .liste { order: 2; position: static; }
+  .items { max-height: 420px; }
+  .etat { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+
+<header class="barre">
+  <div class="barre-in gouttiere">
+    <div class="marque">Détecteur BTC <small id="symbole">BTCUSDT perp</small></div>
+    <nav class="onglets" role="tablist" aria-label="Vues">
+      <button role="tab" id="t-alertes" aria-selected="true" data-vue="alertes">Alertes</button>
+      <button role="tab" id="t-frequence" aria-selected="false" data-vue="frequence">Fréquence</button>
+      <button role="tab" id="t-parametres" aria-selected="false" data-vue="parametres">Paramètres</button>
+    </nav>
+    <div class="etat"><span class="pastille" id="pastille"><i></i>Maquette sur données réelles</span><span id="fraicheur" class="num"></span></div>
+  </div>
+</header>
+
+<main>
+  <section id="vue-alertes" class="vue gouttiere">
+    <div class="grille">
+      <aside class="liste" aria-label="Alertes">
+        <div class="filtres">
+          <div class="puces" id="f-niveau">
+            <button class="puce" data-v="tous" aria-pressed="true">Toutes</button>
+            <button class="puce" data-v="setup" aria-pressed="false">🟢 Setups</button>
+            <button class="puce" data-v="prepa" aria-pressed="false">🟡 En préparation</button>
+          </div>
+          <div class="puces" id="f-strat">
+            <button class="puce" data-v="0" aria-pressed="true">S1 + S2</button>
+            <button class="puce" data-v="1" aria-pressed="false">Continuation</button>
+            <button class="puce" data-v="2" aria-pressed="false">Retournement</button>
+          </div>
+          <div class="puces" id="f-sens">
+            <button class="puce" data-v="" aria-pressed="true">Long + short</button>
+            <button class="puce" data-v="long" aria-pressed="false">Long</button>
+            <button class="puce" data-v="short" aria-pressed="false">Short</button>
+            <button class="puce" data-v="moi" aria-pressed="false">Avec mes niveaux</button>
+          </div>
+          <div class="compte" id="compte"></div>
+        </div>
+        <div class="items" id="items"></div>
+      </aside>
+
+      <div class="detail">
+        <div class="carte">
+          <div class="titre-alerte" id="titre"></div>
+          <div class="outils">
+            <div class="groupe-tf" id="tfs" role="group" aria-label="Timeframe du graphique"></div>
+            <div class="calques" id="calques"></div>
+            <div class="profil-choix" id="profil-choix"><b>Profil de volume :</b>
+              <span class="seg" role="group" aria-label="Profil de volume">
+                <button type="button" data-profil="fin" aria-pressed="true">Fin du graphique (comme ton outil)</button>
+                <button type="button" data-profil="alerte" aria-pressed="false">Au moment de l'alerte</button>
+                <button type="button" data-profil="aucun" aria-pressed="false">Masqué</button>
+              </span></div>
+          </div>
+          <div class="zone-graph">
+            <div id="graph"></div>
+            <div id="rsi"></div>
+            <div class="voile" id="voile" hidden></div>
+            <div class="consigne" id="consigne" hidden></div>
+          </div>
+          <div class="legende" id="legende"></div>
+        </div>
+        <div class="fiche" id="fiche"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="vue-frequence" class="vue gouttiere" hidden>
+    <div class="page" id="frequence"></div>
+  </section>
+
+  <section id="vue-parametres" class="vue gouttiere" hidden>
+    <div class="page">
+      <h1>Paramètres</h1>
+      <p id="intro-params">Tout ce que le détecteur utilise est réglable ici. En ligne, « Enregistrer » écrit tes réglages dans le dépôt GitHub du détecteur, qui les applique à la vérification suivante (au plus une heure). Dans cette maquette, l'enregistrement n'est pas encore branché.</p>
+      <div class="connexion" id="connexion" hidden>
+        <h2>Connexion à ton dépôt GitHub</h2>
+        <p class="note" style="margin:0">Pour enregistrer les paramètres et retrouver tes niveaux sur tous tes appareils, la page a besoin d'un jeton GitHub. Il reste dans ce navigateur, nulle part ailleurs.</p>
+        <ol>
+          <li>GitHub → photo de profil → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token.</li>
+          <li>Repository access : <b>Only select repositories</b> → <span class="num" id="nom-depot">detecteur-btc</span>.</li>
+          <li>Permissions : <b>Contents</b> en Read and write, et <b>Actions</b> en Read and write.</li>
+          <li>Copie le jeton (il commence par <span class="num">github_pat_</span>) et colle-le ci-dessous.</li>
+        </ol>
+        <div class="ligne"><input id="jeton" type="password" autocomplete="off" placeholder="github_pat_…" aria-label="Jeton GitHub">
+          <button class="btn" type="button" id="garder-jeton">Utiliser ce jeton</button><button class="btn" type="button" id="oublier-jeton">Oublier</button></div>
+        <span id="etat-jeton" class="note" style="margin:0"></span>
+      </div>
+      <form id="params" class="params"></form>
+      <div class="actions">
+        <button class="btn prim" id="enregistrer" type="button" disabled>Enregistrer</button>
+        <button class="btn" id="lancer" type="button" hidden>Lancer la vérification maintenant</button>
+        <button class="btn" id="reinit" type="button">Annuler mes modifications</button>
+        <span class="note" id="nb-modifs"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+"use strict";
+const LWC = window.LightweightCharts;
+const NOM_TF = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H2: "2h", H3: "3h", H4: "4h", H5: "5h", H6: "6h", H8: "8h", H12: "12h", D: "D" };
+const DUREE = { M1: 60, M5: 300, M15: 900, M30: 1800, H1: 3600, H2: 7200, H3: 10800, H4: 14400, H5: 18000, H6: 21600, H8: 28800, H12: 43200, D: 86400 };
+const tfn = tf => NOM_TF[tf] || tf;
+const NOMS_STRAT = { 1: "Continuation", 2: "Retournement" };
+const CALQUES = [["zones", "Zones de l'alerte"], ["fibo", "Fibo"], ["fvg", "FVG"], ["structure", "BOS / sweep"], ["declencheurs", "Déclencheurs"], ["toutes", "Toutes les alertes"], ["moi", "Mes niveaux"], ["ema", "EMA 8/21/50/200"], ["volume", "Volume"], ["rsi", "RSI"]];
+const etat = { a: null, tf: "H1", calques: Object.fromEntries(CALQUES.map(c => [c[0], true])), profil: "fin", niveau: "tous", strat: "0", sens: "", nb: 200, placement: null };
+let D = null, chart, serie, vol, emaSeries = [], calque, rsiChart, rsiSerie, calqueRsi, sync = false;
+let rows = [], temps = [], fvgs = [], cacheTF = {}, marqueursParTemps = new Map();
+
+const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+const nf0 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+const prix = p => p == null || isNaN(p) ? "—" : nf.format(p);
+const fmtParis = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", hourCycle: "h23" });
+const fmtCourt = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", hourCycle: "h23" });
+const quand = t => fmtParis.format(new Date(t * 1000)).replace(/ (\d\d)$/, " $1h").replace(",", "");
+const quandCourt = t => fmtCourt.format(new Date(t * 1000)).replace(/ (\d\d)$/, " $1h").replace(",", "");
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// Heure de Paris sur l'axe : le graphique affiche des heures UTC, on lui donne des heures « Paris écrites en UTC ».
+const fmtParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const cacheDecal = new Map();
+function decal(t) {
+  const h = Math.floor(t / 3600);
+  if (cacheDecal.has(h)) return cacheDecal.get(h);
+  const p = Object.fromEntries(fmtParts.formatToParts(new Date(h * 3600 * 1000)).map(x => [x.type, x.value]));
+  const off = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) / 1000 - h * 3600;
+  cacheDecal.set(h, off);
+  return off;
+}
+const P = t => t + decal(t);
+
+// ------------------------------------------------------------------ dépôt GitHub (en ligne seulement)
+const CLE_JETON = "detecteur-btc-jeton";
+const GH = { jeton: "" };
+try { GH.jeton = localStorage.getItem(CLE_JETON) || ""; } catch (e) { GH.jeton = ""; }
+const enLigne = () => D && !D.meta.maquette && D.meta.depot;
+function b64(s) { const o = new TextEncoder().encode(s); let t = ""; for (let i = 0; i < o.length; i += 0x8000) t += String.fromCharCode.apply(null, o.subarray(i, i + 0x8000)); return btoa(t); }
+function deb64(s) { const t = atob(s.replace(/\n/g, "")), o = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) o[i] = t.charCodeAt(i); return new TextDecoder().decode(o); }
+async function gh(methode, chemin, corps) {
+  const r = await fetch(`https://api.github.com/repos/${D.meta.depot}/${chemin}`, { method: methode, cache: "no-store",
+    headers: { Authorization: `Bearer ${GH.jeton}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+    body: corps ? JSON.stringify(corps) : undefined });
+  if (r.status === 204) return null;
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? "jeton refusé" : r.status === 403 || r.status === 404 ? "jeton sans les droits sur ce dépôt" : (j.message || r.status));
+  return j;
+}
+async function ecrireFichier(chemin, texte, message) {
+  let sha;
+  try { sha = (await gh("GET", `contents/${chemin}`)).sha; } catch (e) { sha = undefined; }
+  return gh("PUT", `contents/${chemin}`, { message, content: b64(texte), sha });
+}
+async function lireFichier(chemin) { try { return deb64((await gh("GET", `contents/${chemin}`)).content); } catch (e) { return null; } }
+let minuterieMoi = null;
+function synchroniserMoi() {
+  if (!enLigne() || !GH.jeton) return;
+  clearTimeout(minuterieMoi);
+  minuterieMoi = setTimeout(() => ecrireFichier("etat/mes_niveaux.json", JSON.stringify(MOI, null, 1), "Mes niveaux (dashboard)").catch(() => {}), 1500);
+}
+async function chargerMoiDepot() {
+  if (!enLigne() || !GH.jeton) return;
+  const t = await lireFichier("etat/mes_niveaux.json");
+  if (!t) return;
+  try { MOI = Object.assign({}, JSON.parse(t), MOI); ecrireMoi(MOI); if (etat.a) { fiche(); dessiner(); } liste(); } catch (e) { /* fichier illisible : on garde la copie locale */ }
+}
+
+// ------------------------------------------------------------------ niveaux saisis à la main (ce navigateur)
+const CLE_MOI = "detecteur-btc-niveaux";
+function lireMoi() { try { return JSON.parse(localStorage.getItem(CLE_MOI) || "{}"); } catch (e) { return {}; } }
+function ecrireMoi(m) { synchroniserMoi(); try { localStorage.setItem(CLE_MOI, JSON.stringify(m)); return true; } catch (e) { return false; } }
+let MOI = lireMoi();
+const niveauxDe = a => MOI[a.id] || {};
+
+// ------------------------------------------------------------------ temps → position sur le graphique
+function logique(t) {
+  const n = temps.length;
+  if (!n) return 0;
+  const d = DUREE[etat.tf];
+  if (t >= temps[n - 1]) return n - 1 + (t - temps[n - 1]) / d;
+  if (t < temps[0]) return (t - temps[0]) / d;
+  let a = 0, b = n - 1;
+  while (a < b) { const m = (a + b + 1) >> 1; if (temps[m] <= t) a = m; else b = m - 1; }
+  return a;
+}
+const indexDe = t => Math.max(0, Math.min(temps.length - 1, Math.floor(logique(t))));
+
+// ------------------------------------------------------------------ dessins (primitive du graphique)
+let places = [];
+function libre(X, Y, w, h) { return !places.some(r => X < r[0] + r[2] && r[0] < X + w && Y < r[1] + r[3] && r[1] < Y + h); }
+function etiquette(ctx, txt, x, y, c, pos) {
+  const w = ctx.measureText(txt).width + 10, h = 17;
+  let X = pos === "droite" ? x + 6 : pos === "gauche" ? x - w - 6 : pos === "dessus" ? x + 4 : x - w / 2;
+  let Y = pos === "bas" ? y + 7 : pos === "droite" || pos === "gauche" ? y - h / 2 : pos === "dessus" ? y - h - 2 : y - h - 7;
+  const pas = pos === "bas" ? h + 2 : -(h + 2);
+  for (let k = 0; k < 6 && !libre(X, Y, w, h); k++) Y += pas;
+  places.push([X, Y, w, h]);
+  ctx.globalAlpha = 0.95; ctx.fillStyle = tok("--panel"); ctx.strokeStyle = c; ctx.lineWidth = 1;
+  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(X, Y, w, h, 4); else ctx.rect(X, Y, w, h); ctx.fill(); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.textBaseline = "middle"; ctx.fillText(txt, X + 5, Y + h / 2 + .5);
+}
+class Calque {
+  constructor() { this.d = []; this.vues = [{ zOrder: () => "bottom", renderer: () => ({ draw: c => this.dessiner(c, "fond") }) },
+                                           { zOrder: () => "top", renderer: () => ({ draw: c => this.dessiner(c, "dessus") }) }]; }
+  attached(p) { this.chart = p.chart; this.serie = p.series; this.maj = p.requestUpdate; }
+  detached() {}
+  updateAllViews() {}
+  paneViews() { return this.vues; }
+  fixer(d) { this.d = d; if (this.maj) this.maj(); }
+  dessiner(cible, couche) {
+    const ts = this.chart.timeScale(), s = this.serie;
+    cible.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+      const x = l => ts.logicalToCoordinate(l);
+      const y = p => s.priceToCoordinate(p);
+      const x0 = x(0), x1 = x(1);
+      const ecart = (x0 != null && x1 != null) ? Math.max(1, x1 - x0) : 6;
+      const W = mediaSize.width;
+      // une zone part de son origine (à gauche) et va vers la droite : jusqu'à la bougie qui la comble, sinon jusqu'au bord
+      const xD = t => t == null ? W : x(logique(t));
+      ctx.save();
+      if (couche === "fond") places = [];
+      ctx.font = "500 11px " + tok("--f-texte");
+      for (const o of this.d) {
+        if ((o.couche || "dessus") !== couche) continue;
+        if (o.k === "rect") {
+          const xa = x(logique(o.t1)), xb = xD(o.t2), ya = y(o.p1), yb = y(o.p2);
+          if (xa == null || xb == null || ya == null || yb == null) continue;
+          const L = xa - ecart / 2, R = o.t2 == null ? W : xb + ecart / 2, T = Math.min(ya, yb), H = Math.max(1, Math.abs(yb - ya));
+          if (R < 0 || L > W) continue;
+          ctx.globalAlpha = o.alpha ?? 0.16; ctx.fillStyle = o.c; ctx.fillRect(L, T, R - L, H);
+          if (o.bord !== false) { ctx.globalAlpha = 0.9; ctx.strokeStyle = o.c; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.strokeRect(L + .5, T + .5, R - L - 1, H - 1); }
+          if (o.label) {
+            ctx.globalAlpha = 1; const w = ctx.measureText(o.label).width + 6; let Y = T + 2; const X = Math.max(L + 2, 2);
+            for (let k = 0; k < 6 && !libre(X, Y, w, 14); k++) Y += 15;
+            places.push([X, Y, w, 14]); ctx.fillStyle = o.cl || o.c; ctx.textBaseline = "top"; ctx.fillText(o.label, X + 2, Y + 1);
+          }
+          ctx.globalAlpha = 1;
+        } else if (o.k === "seg") {
+          const xa = x(logique(o.t1)), xb = xD(o.t2), ya = y(o.p1), yb = y(o.p2);
+          if (xa == null || xb == null || ya == null || yb == null) continue;
+          ctx.strokeStyle = o.c; ctx.lineWidth = o.w || 1.5; ctx.setLineDash(o.dash || []);
+          ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke(); ctx.setLineDash([]);
+          if (o.label) etiquette(ctx, o.label, o.fin ? xb : Math.max(xa, 2), o.fin ? yb : ya, o.c, o.pos || "haut");
+        } else if (o.k === "point") {
+          const xa = x(logique(o.t)), ya = y(o.p);
+          if (xa == null || ya == null) continue;
+          ctx.fillStyle = o.c; ctx.beginPath(); ctx.arc(xa, ya, o.r || 4, 0, 2 * Math.PI); ctx.fill();
+          ctx.strokeStyle = tok("--panel"); ctx.lineWidth = 1.5; ctx.stroke();
+          if (o.label) etiquette(ctx, o.label, xa, ya, o.c, o.pos || "haut");
+        } else if (o.k === "fvg") {
+          // comme ton indicateur : boîte sur la bougie du milieu et la suivante ; une FVG comblée par une mèche disparaît
+          let n = 0;
+          for (let j = o.liste.length - 1; j >= 0 && n < o.max; j--) {
+            const f = o.liste[j];
+            if (f.comble != null) continue;
+            n++;
+            const xa = x(f.i1), xb = x(f.i1 + 1), ya = y(f.lo), yb = y(f.hi);
+            if (xa == null || xb == null || ya == null || yb == null) continue;
+            ctx.fillStyle = f.h ? tok("--fvg-h") : tok("--fvg-b");
+            ctx.fillRect(xa - ecart / 2, Math.min(ya, yb), xb - xa + ecart, Math.max(1, Math.abs(yb - ya)));
+          }
+        } else if (o.k === "profil") {
+          const xa = o.l != null ? x(o.l) : null;
+          if (xa == null) continue;
+          const largeur = Math.min(20 * ecart, mediaSize.width * 0.3), max = Math.max(...o.vol);
+          o.vol.forEach((v, i) => {
+            const ya = y(o.bords[i]), yb = y(o.bords[i + 1]);
+            if (ya == null || yb == null) return;
+            const T = Math.min(ya, yb) + 1, H = Math.max(1, Math.abs(yb - ya) - 2), w = largeur * v / max;
+            let c = tok("--muted"), al = (i >= o.val && i <= o.vah) ? 0.45 : 0.22;
+            if (i === o.poc) { c = tok("--z-poc"); al = 0.85; } else if (i === o.vah) { c = tok("--z-vah"); al = 0.8; } else if (i === o.val) { c = tok("--z-val"); al = 0.8; }
+            ctx.globalAlpha = al; ctx.fillStyle = c; ctx.fillRect(xa, T, w, H); ctx.globalAlpha = 1;
+            const nom = i === o.poc ? "POC" : i === o.vah ? "VAH" : i === o.val ? "VAL" : "";
+            if (nom && H >= 9) { ctx.fillStyle = tok("--ink"); ctx.textBaseline = "middle"; ctx.fillText(nom, xa + 4, T + H / 2); }
+          });
+          ctx.fillStyle = tok("--muted"); ctx.textBaseline = "bottom";
+          const yh = y(o.bords[o.bords.length - 1]);
+          if (yh != null) ctx.fillText(o.titre, xa, yh - 3);
+        }
+      }
+      ctx.restore();
+    });
+  }
+}
+
+// ------------------------------------------------------------------ calculs côté page : ATR, FVG, profil de volume
+function atrTF() {
+  const n = rows.length, a = new Array(n).fill(NaN), per = D.config.general.atr_periode;
+  let m = null;
+  for (let i = 0; i < n; i++) {
+    const h = rows[i][2], l = rows[i][3], pc = i ? rows[i - 1][4] : rows[i][4];
+    const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+    m = m == null ? tr : m + (tr - m) / per;
+    a[i] = m;
+  }
+  return a;
+}
+function calculerFVG() {
+  // Comme ton indicateur FVG : boîte posée sur la bougie du milieu, effacée quand une mèche la comble entièrement.
+  const out = [], atr = atrTF(), k = D.config.strat1.fvg_min_atr, n = rows.length;
+  for (let i = 2; i < n; i++) {
+    const h2 = rows[i - 2][2], l2 = rows[i - 2][3], h0 = rows[i][2], l0 = rows[i][3];
+    let f = null;
+    if (l0 > h2 && l0 - h2 >= k * atr[i]) f = { h: true, lo: h2, hi: l0 };
+    else if (h0 < l2 && l2 - h0 >= k * atr[i]) f = { h: false, lo: h0, hi: l2 };
+    if (!f) continue;
+    f.i1 = i - 1; f.comble = null;
+    for (let j = i + 1; j < n; j++) { if (f.h ? rows[j][3] <= f.lo : rows[j][2] >= f.hi) { f.comble = j; break; } }
+    out.push(f);
+  }
+  return out;
+}
+function profilJS(iFin, jours) {
+  // Même calcul que le détecteur : bougies du timeframe sur la période, volume réparti entre plus bas et plus haut.
+  const pr = D.config.profil, N = pr.niveaux;
+  const tFin = iFin + 1 < rows.length ? rows[iFin + 1][0] : rows[iFin][0] + DUREE[etat.tf];
+  let g = iFin; while (g > 0 && rows[g - 1][0] >= tFin - jours * 86400) g--;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = g; i <= iFin; i++) { lo = Math.min(lo, rows[i][3]); hi = Math.max(hi, rows[i][2]); }
+  if (!(hi > lo)) hi = lo + 1e-9;
+  const bords = Array.from({ length: N + 1 }, (_, k) => lo + (hi - lo) * k / N), v = new Array(N).fill(0);
+  for (let i = g; i <= iFin; i++) {
+    const h = rows[i][2], l = rows[i][3], vv = rows[i][5], r = h - l;
+    if (r <= 0) { const k = Math.min(N - 1, Math.max(0, Math.floor((l - lo) / (hi - lo) * N))); v[k] += vv; continue; }
+    for (let k = 0; k < N; k++) { const ov = Math.min(h, bords[k + 1]) - Math.max(l, bords[k]); if (ov > 0) v[k] += vv * ov / r; }
+  }
+  let poc = 0; v.forEach((x, k) => { if (x > v[poc]) poc = k; });
+  const cible = pr.value_area * v.reduce((s, x) => s + x, 0);
+  let acc = v[poc], a = poc, b = poc;
+  while (acc < cible && (a > 0 || b < N - 1)) {
+    const haut = b < N - 1 ? v[b + 1] : -1, bas = a > 0 ? v[a - 1] : -1;
+    if (haut >= bas) { b++; acc += haut; } else { a--; acc += bas; }
+  }
+  return { bords, vol: v, poc, vah: b, val: a, debut: rows[g][0] };
+}
+
+// ------------------------------------------------------------------ graphique
+function optionsGraph(axe = true) {
+  return {
+    autoSize: true,
+    layout: { background: { type: "solid", color: tok("--panel") }, textColor: tok("--muted"), fontFamily: "IBM Plex Mono, ui-monospace, monospace", fontSize: 11, attributionLogo: true },
+    grid: { vertLines: { color: tok("--grid") }, horzLines: { color: tok("--grid") } },
+    rightPriceScale: { borderColor: tok("--line"), minimumWidth: 76 },
+    timeScale: { borderColor: tok("--line"), timeVisible: DUREE[etat.tf] < 86400, secondsVisible: false, rightOffset: 30, visible: axe },
+    crosshair: { mode: 0 },
+    localization: { locale: "fr-FR", priceFormatter: p => nf.format(p) },
+  };
+}
+function couleurEma(k) { return tok({ 8: "--ema8", 21: "--ema21", 50: "--ema50", 200: "--ema200" }[k] || "--muted"); }
+function creerGraph() {
+  chart = LWC.createChart(document.getElementById("graph"), optionsGraph());
+  serie = chart.addCandlestickSeries({ upColor: tok("--long"), downColor: tok("--short"), borderVisible: false, wickUpColor: tok("--long"), wickDownColor: tok("--short"), priceLineVisible: false });
+  vol = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
+  emaSeries = D.config.general.emas.map(k => chart.addLineSeries({ color: couleurEma(k), lineWidth: k >= 50 ? 1.5 : 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }));
+  calque = new Calque(); serie.attachPrimitive(calque);
+  rsiChart = LWC.createChart(document.getElementById("rsi"), optionsGraph(false));
+  rsiSerie = rsiChart.addLineSeries({ color: tok("--rsi"), lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
+  for (const v of D.config.affichage.rsi_zones) rsiSerie.createPriceLine({ price: v, color: tok("--muted"), lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "" });
+  calqueRsi = new Calque(); rsiSerie.attachPrimitive(calqueRsi);
+  const lier = (a, b) => a.timeScale().subscribeVisibleLogicalRangeChange(r => { if (r && !sync) { sync = true; b.timeScale().setVisibleLogicalRange(r); sync = false; } });
+  lier(chart, rsiChart); lier(rsiChart, chart);
+  chart.subscribeClick(clicGraph);
+}
+function couleursGraph() {
+  if (!chart) return;
+  chart.applyOptions(optionsGraph()); rsiChart.applyOptions(optionsGraph(false));
+  serie.applyOptions({ upColor: tok("--long"), downColor: tok("--short"), wickUpColor: tok("--long"), wickDownColor: tok("--short") });
+  D.config.general.emas.forEach((k, i) => emaSeries[i].applyOptions({ color: couleurEma(k) }));
+  rsiSerie.applyOptions({ color: tok("--rsi") });
+  afficherTF(false);
+}
+async function chargerBougies(tf) {
+  if (cacheTF[tf]) return cacheTF[tf];
+  const r = await fetch(`donnees/bougies_${tf}.json`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`bougies ${tfn(tf)} : ${r.status}`);
+  cacheTF[tf] = await r.json();
+  return cacheTF[tf];
+}
+async function choisirTF(tf, recentrer = true) {
+  etat.tf = tf;
+  boutonsTF();
+  const voile = document.getElementById("voile");
+  if (D.meta.tf_absents.includes(tf)) {
+    voile.innerHTML = `<div><b>Pas de bougies ${tfn(tf)} dans la maquette</b>${esc(D.meta.message_absents)}</div>`;
+    voile.hidden = false;
+    return;
+  }
+  voile.hidden = true;
+  try { await chargerBougies(tf); } catch (e) { voile.innerHTML = `<div><b>Bougies ${tfn(tf)} indisponibles</b>${esc(e.message)}</div>`; voile.hidden = false; return; }
+  if (etat.tf !== tf) return;
+  afficherTF(recentrer);
+  if (etat.a) fiche();
+}
+function afficherTF(recentrer) {
+  const d = cacheTF[etat.tf];
+  if (!d || D.meta.tf_absents.includes(etat.tf)) return;
+  rows = d.lignes;
+  temps = rows.map(r => P(r[0]));
+  // passage à l'heure d'hiver : deux heures UTC tombent sur la même heure de Paris ; l'axe doit rester strictement croissant
+  for (let i = 1; i < temps.length; i++) if (temps[i] <= temps[i - 1]) temps[i] = temps[i - 1] + 1;
+  chart.applyOptions({ timeScale: { timeVisible: DUREE[etat.tf] < 86400 } });
+  serie.setData(rows.map((r, i) => ({ time: temps[i], open: r[1], high: r[2], low: r[3], close: r[4] })));
+  const cl = tok("--long"), cs = tok("--short");
+  vol.setData(etat.calques.volume ? rows.map((r, i) => ({ time: temps[i], value: r[5], color: (r[4] >= r[1] ? cl : cs) + "55" })) : []);
+  const ne = D.config.general.emas.length;
+  emaSeries.forEach((s, k) => s.setData(etat.calques.ema ? rows.map((r, i) => ({ time: temps[i], value: r[6 + k] })) : []));
+  rsiSerie.setData(rows.map((r, i) => ({ time: temps[i], value: r[6 + ne] })));
+  document.getElementById("rsi").hidden = !etat.calques.rsi;
+  fvgs = calculerFVG();
+  dessiner();
+  if (recentrer) centrer();
+}
+function centrer() {
+  if (!etat.a || !temps.length) return;
+  const i = indexDe(P(etat.a.bougie));
+  const avant = { H1: 70, H2: 50, H3: 50, H4: 50, H5: 50, H6: 50, H8: 45, H12: 45, D: 55 }[etat.tf] || 60, apres = 35;
+  chart.timeScale().setVisibleLogicalRange({ from: i - avant, to: i + apres });
+}
+
+// ------------------------------------------------------------------ zones
+function couleurZone(type) {
+  return tok({ OB: "--z-ob", FVG: "--z-fvg", Fibo: "--z-fibo", POC: "--z-poc", VAH: "--z-vah", VAL: "--z-val", EMA50: "--z-ema",
+              "Bas de range": "--z-range", "Haut de range": "--z-range", PDL: "--z-pd", PDH: "--z-pd" }[type] || "--muted");
+}
+const NOM_ZONE = { OB: "Order block", FVG: "Imbalance (FVG)", Fibo: "Fibo", POC: "POC", VAH: "VAH", VAL: "VAL", EMA50: "EMA 50",
+                   "Bas de range": "Bas du range", "Haut de range": "Haut du range", PDL: "Plus bas D1 précédent", PDH: "Plus haut D1 précédent" };
+const fiboTexte = r => String(r).replace(".", ",");
+const nomFibo = z => z.niveau && z.niveau.length === 2 ? `Golden zone ${fiboTexte(z.niveau[0])}–${fiboTexte(z.niveau[1])}` : `Fibo ${fiboTexte(z.niveau ? z.niveau[0] : "")}`;
+
+function dessiner() {
+  const a = etat.a, c = etat.calques, d = [], dr = [];
+  if (c.fvg) d.push({ k: "fvg", couche: "fond", liste: fvgs, max: D.config.affichage.fvg_max });
+  marqueurs();
+  if (!a) { calque.fixer(d); calqueRsi.fixer([]); return; }
+  const tA = P(a.bougie), dur = DUREE[etat.tf], long = a.sens === "long";
+  if (c.zones) for (const z of a.zones) {
+    const col = couleurZone(z.type), nomz = `${z.type} ${tfn(z.tf)}`;
+    if (z.type === "Fibo") continue;   // dessiné avec ses niveaux
+    if (z.range) {
+      d.push({ k: "rect", couche: "fond", t1: P(z.range.debut), t2: null, p1: z.range.haut[0], p2: z.range.haut[1], c: col, label: `Haut du range ${tfn(z.tf)}` });
+      d.push({ k: "rect", couche: "fond", t1: P(z.range.debut), t2: null, p1: z.range.bas[0], p2: z.range.bas[1], c: col, label: `Bas du range ${tfn(z.tf)}` });
+    } else if (z.lo === z.hi) {
+      d.push({ k: "seg", t1: z.debut ? P(z.debut) : tA, t2: null, p1: z.lo, p2: z.hi, c: col, w: 2, label: `${z.type} ${prix(z.lo)}`, pos: "dessus" });
+    } else if (z.type === "FVG") {
+      // sur les bougies qui la forment (comme ton indicateur), puis prolongée en léger vers la droite jusqu'à son comblement
+      const tFin = P(z.debut + 2 * DUREE[z.tf]) - dur;
+      d.push({ k: "rect", couche: "fond", t1: P(z.debut), t2: tFin, p1: z.lo, p2: z.hi, c: col, label: nomz, alpha: 0.3 });
+      d.push({ k: "rect", couche: "fond", t1: tFin + dur, t2: z.fin ? P(z.fin) : null, p1: z.lo, p2: z.hi, c: col, alpha: 0.08, bord: false });
+    } else if (z.type === "OB") {
+      // depuis la bougie de l'OB, vers la droite, jusqu'à la clôture qui le casse
+      d.push({ k: "rect", couche: "fond", t1: P(z.debut), t2: z.fin ? P(z.fin) : null, p1: z.lo, p2: z.hi, c: col, label: nomz });
+    } else if (z.type === "EMA50") {
+      d.push({ k: "rect", couche: "fond", t1: tA, t2: tA + 12 * Math.max(dur, DUREE[a.tf]), p1: z.lo, p2: z.hi, c: col, label: `EMA 50 ${tfn(z.tf)}` });
+    } else {
+      // POC / VAH / VAL : niveaux du profil au moment de l'alerte, à partir de l'alerte vers la droite
+      d.push({ k: "rect", couche: "fond", t1: tA, t2: null, p1: z.lo, p2: z.hi, c: col, label: `${nomz} (à l'alerte)` });
+    }
+  }
+  if (c.fibo) {
+    const vus = new Set(), cfg = D.config.strat1, col = tok("--z-fibo"), [g0, g1] = cfg.fibo_golden;
+    for (const z of a.zones) if (z.fibo) {
+      const f = z.fibo, H = f.fin.p, L = f.debut.p, t0 = P(f.debut.t), cle = f.debut.t + "-" + f.fin.t;
+      if (!vus.has(cle)) {
+        vus.add(cle);
+        d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: H - g0 * (H - L), p2: H - g1 * (H - L), c: col, alpha: 0.14, bord: false });
+        d.push({ k: "seg", t1: t0, t2: P(f.fin.t), p1: L, p2: H, c: col, w: 1.5, dash: [6, 4] });
+        d.push({ k: "point", t: t0, p: L, c: col, r: 5, label: `Départ Fibo ${prix(L)}`, pos: H > L ? "bas" : "haut" });
+        d.push({ k: "point", t: P(f.fin.t), p: H, c: col, r: 5, label: `Arrivée Fibo ${prix(H)}`, pos: H > L ? "haut" : "bas" });
+        for (const r of cfg.fibo_niveaux) {
+          const p = H - r * (H - L), gold = r >= g0 && r <= g1;
+          d.push({ k: "seg", t1: t0, t2: null, p1: p, p2: p, c: col, w: 1, dash: gold ? [] : [3, 3], label: `${fiboTexte(r)} · ${prix(p)}`, pos: "dessus" });
+        }
+      }
+      // le niveau (ou la golden zone) qui contient la clôture du déclencheur
+      d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: z.lo, p2: z.hi, c: col, alpha: 0.3, label: `${nomFibo(z)} ${tfn(z.tf)}` });
+    }
+  }
+  if (c.structure && a.cassure) {
+    const k = a.cassure;
+    d.push({ k: "seg", t1: P(k.piv_t), t2: P(k.t), p1: k.niv, p2: k.niv, c: tok("--ink"), w: 1.5, label: `${k.type} ${tfn(k.tf)}`, fin: true, pos: long ? "haut" : "bas" });
+  }
+  if (c.structure && a.sweep) {
+    const s = a.sweep;
+    d.push({ k: "seg", t1: P(s.piv_t), t2: P(s.t), p1: s.niv, p2: s.niv, c: tok("--ink"), w: 1.5, dash: [4, 3], label: "Swing balayé", pos: long ? "haut" : "bas" });
+    d.push({ k: "point", t: P(s.t), p: s.meche, c: tok("--prepa"), r: 5, label: "Sweep", pos: long ? "bas" : "haut" });
+  }
+  if (c.declencheurs) for (const x of a.declencheurs) {
+    const col = a.niveau === "setup" ? (long ? tok("--long") : tok("--short")) : tok("--prepa");
+    if (x.liquidite) d.push({ k: "seg", t1: P(x.liquidite.piv_t), t2: tA, p1: x.liquidite.niv, p2: x.liquidite.niv, c: col, w: 1, dash: [2, 3], label: "Liquidité prise", pos: long ? "bas" : "haut" });
+    if (x.p1 && x.p2) {
+      const nm = x.nom.includes("cachée") ? "Div. cachée" : "Divergence";
+      d.push({ k: "seg", t1: P(x.p1.t), t2: P(x.p2.t), p1: x.p1.p, p2: x.p2.p, c: col, w: 2, label: nm, fin: true, pos: long ? "bas" : "haut" });
+      dr.push({ k: "seg", t1: P(x.p1.t), t2: P(x.p2.t), p1: x.p1.rsi, p2: x.p2.rsi, c: col, w: 2 });
+    }
+    if (x.a && x.cassure) {
+      d.push({ k: "seg", t1: P(x.a.t), t2: P(x.cassure.t), p1: x.a.p, p2: x.cassure.p, c: col, w: 1.5, label: x.nom.includes("wedge") ? "Wedge" : "Drapeau", pos: long ? "haut" : "bas" });
+      if (x.b) d.push({ k: "point", t: P(x.b.t), p: x.b.p, c: col, r: 3 });
+      d.push({ k: "point", t: P(x.cassure.t), p: x.cassure.p, c: col, r: 4, label: "Cassure", pos: long ? "haut" : "bas" });
+      if (x.retest_t) d.push({ k: "point", t: P(x.retest_t), p: x.cassure.p, c: col, r: 4, label: "Retest", pos: long ? "bas" : "haut" });
+    }
+    if (x.nom === "CHoCH" && x.niv != null) d.push({ k: "seg", t1: P(x.piv_t), t2: P(x.t), p1: x.niv, p2: x.niv, c: col, w: 1.5, label: "CHoCH", fin: true, pos: long ? "haut" : "bas" });
+  }
+  if (c.moi) {
+    const m = niveauxDe(a), cm = tok("--moi");
+    const lignes = [["entree", "Entrée", [3, 3]], ["sl", "Invalidation", []], ["tp1", "TP1", []], ["tp2", "TP2", [2, 3]]];
+    for (const [k, nom, dash] of lignes) if (m[k] != null) d.push({ k: "seg", t1: tA, t2: null, p1: m[k], p2: m[k], c: k === "sl" ? tok("--short") : k.startsWith("tp") ? tok("--long") : cm, w: 1.5, dash, label: `${nom} ${prix(m[k])}`, pos: "dessus" });
+  }
+  // profil de volume : comme ton outil (fin du graphique) ou au moment de l'alerte
+  if (etat.profil !== "aucun" && rows.length) {
+    const jours = D.config.profil.jours[etat.tf];
+    if (jours) {
+      const iFin = etat.profil === "alerte" ? indexDe(tA) : rows.length - 1;
+      const p = profilJS(iFin, jours);
+      d.push({ k: "profil", couche: "fond", l: iFin + 3, bords: p.bords, vol: p.vol, poc: p.poc, vah: p.vah, val: p.val,
+               titre: `Profil ${tfn(etat.tf)} · ${nf.format(jours < 1 ? jours * 24 : jours)} ${jours < 1 ? "h" : "j"}${etat.profil === "alerte" ? " · à l'alerte" : ""}` });
+    }
+  }
+  calque.fixer(d); calqueRsi.fixer(dr);
+  legende();
+}
+function marqueurs() {
+  // toutes les alertes visibles avec les filtres (petits repères) + l'alerte ouverte (repère légendé)
+  const liste = etat.calques.toutes ? visibles() : (etat.a ? [etat.a] : []);
+  marqueursParTemps = new Map();
+  const m = [];
+  if (!temps.length) { serie.setMarkers([]); return; }
+  const tMax = temps[temps.length - 1] + DUREE[etat.tf];
+  for (const a of liste) {
+    const t = P(a.bougie);
+    if (t < temps[0] || t > tMax) continue;
+    const tt = temps[indexDe(t)], long = a.sens === "long", sel = etat.a && a.id === etat.a.id;
+    if (!marqueursParTemps.has(tt)) marqueursParTemps.set(tt, []);
+    marqueursParTemps.get(tt).push(a);
+    if (sel) continue;
+    const col = a.niveau === "setup" ? (long ? tok("--long") : tok("--short")) : tok("--prepa");
+    m.push({ time: tt, position: long ? "belowBar" : "aboveBar", color: col, shape: a.niveau === "setup" ? (long ? "arrowUp" : "arrowDown") : "circle", size: a.niveau === "setup" ? 1 : 0.6 });
+  }
+  if (etat.a && etat.calques.declencheurs) {
+    const a = etat.a, long = a.sens === "long", t = P(a.bougie);
+    if (t >= temps[0] && t <= tMax) {
+      const tt = temps[indexDe(t)];
+      m.push({ time: tt, position: long ? "belowBar" : "aboveBar", color: a.niveau === "setup" ? (long ? tok("--long") : tok("--short")) : tok("--prepa"),
+               shape: a.niveau === "setup" ? (long ? "arrowUp" : "arrowDown") : "circle", size: 2, text: a.declencheurs.map(courtDecl).join(" + ") });
+    }
+  }
+  m.sort((u, v) => u.time - v.time);
+  serie.setMarkers(m);
+}
+function courtDecl(x) {
+  return x.nom.replace(" — en attente du retest", "").replace(" — en attente du déclencheur", "").replace("Cassure du drapeau (retest)", "Drapeau")
+    .replace("Cassure du wedge (retest)", "Wedge").replace("Bougie de rejet", x.forme || "Rejet").replace("Divergence RSI cachée", "Div. cachée").replace("Divergence RSI", "Divergence");
+}
+function legende() {
+  const a = etat.a, el = document.getElementById("legende");
+  const types = a ? [...new Set(a.zones.map(z => z.type))] : [];
+  const items = types.map(t => `<span><i style="background:${couleurZone(t)}"></i>${esc(NOM_ZONE[t] || t)}</span>`);
+  if (etat.calques.fvg) items.push(`<span><i style="background:${tok("--fvg-h")}"></i>FVG ${tfn(etat.tf)} pas encore comblées (${D.config.affichage.fvg_max} au plus)</span>`);
+  if (etat.calques.ema) D.config.general.emas.forEach(k => items.push(`<span><i style="background:${couleurEma(k)};height:2px"></i>EMA ${k}</span>`));
+  if (etat.calques.toutes) items.push(`<span>▲▼ setups · ● pré-alertes : clique dessus pour les ouvrir</span>`);
+  items.push(`<span class="num">Heures de Paris · bougies ${tfn(etat.tf)}</span>`);
+  el.innerHTML = items.join("");
+}
+function clicGraph(param) {
+  if (etat.placement) {
+    if (!param.point) return;
+    const p = serie.coordinateToPrice(param.point.y);
+    if (p == null) return;
+    const m = MOI[etat.a.id] || {};
+    m[etat.placement] = Math.round(p * 10) / 10;
+    MOI[etat.a.id] = m; ecrireMoi(MOI);
+    etat.placement = null; document.getElementById("consigne").hidden = true;
+    fiche(); dessiner(); liste();
+    return;
+  }
+  if (!param.time || !marqueursParTemps.has(param.time)) return;
+  const xs = marqueursParTemps.get(param.time);
+  const choix = xs.find(a => a.niveau === "setup" && (!etat.a || a.id !== etat.a.id)) || xs.find(a => !etat.a || a.id !== etat.a.id);
+  if (choix) { history.replaceState(null, "", "#" + choix.id); choisir(choix.id, false); }
+}
+
+// ------------------------------------------------------------------ liste
+function visibles() {
+  return D.alertes.filter(a => (etat.niveau === "tous" || a.niveau === etat.niveau) && (etat.strat === "0" || String(a.strategie) === etat.strat)
+    && (!etat.sens || (etat.sens === "moi" ? MOI[a.id] && Object.keys(MOI[a.id]).length : a.sens === etat.sens)));
+}
+function nomDecl(a) {
+  return a.declencheurs.map(x => x.nom.replace(" — en attente du déclencheur", "").replace(" — en attente du retest", " (attente retest)")).join(" + ");
+}
+function liste() {
+  const v = visibles().slice().reverse(), el = document.getElementById("items");
+  const ns = v.filter(a => a.niveau === "setup").length;
+  document.getElementById("compte").textContent = `${v.length} alerte${v.length > 1 ? "s" : ""} dont ${ns} setup${ns > 1 ? "s" : ""}, depuis le ${new Date(D.alertes[0].heure * 1000).toLocaleDateString("fr-FR")} · toutes repérées sur le graphique`;
+  if (!v.length) { el.innerHTML = `<div class="vide">Aucune alerte avec ces filtres sur la période.</div>`; return; }
+  el.innerHTML = v.slice(0, etat.nb).map(a => {
+    const col = a.niveau === "setup" ? "var(--setup)" : "var(--prepa)";
+    const moi = MOI[a.id] && Object.keys(MOI[a.id]).length ? `<span class="moi">mes niveaux</span> ` : "";
+    return `<button class="item" data-id="${a.id}" aria-current="${!!(etat.a && etat.a.id === a.id)}">
+      <span class="bande" style="background:${col}"></span>
+      <span class="l1"><span class="sens-${a.sens}">${a.sens === "long" ? "↑" : "↓"}</span>S${a.strategie} ${NOMS_STRAT[a.strategie]} · ${tfn(a.tf)}${a.niveau === "setup" ? ` · ${a.grade}` : ""}</span>
+      <span class="h">${quandCourt(a.heure)}</span>
+      <span class="l2">${moi}${esc(nomDecl(a))} — ${esc(a.familles.join(" + "))}</span><span></span></button>`;
+  }).join("") + (v.length > etat.nb ? `<button class="plus" id="plus">Voir ${Math.min(200, v.length - etat.nb)} alertes plus anciennes (${v.length - etat.nb} restantes)</button>` : "");
+}
+
+// ------------------------------------------------------------------ fiche
+function fiche() {
+  const a = etat.a, long = a.sens === "long";
+  document.getElementById("titre").innerHTML = `<span class="niveau ${a.niveau}">${a.niveau === "setup" ? "🟢 Setup détecté" : "🟡 En préparation"}</span>
+    <h1>${NOMS_STRAT[a.strategie]} · <span class="sens-${a.sens}">${long ? "Long" : "Short"}</span>${a.niveau === "setup" ? ` · grade ${a.grade}` : ""}</h1>
+    <div class="sous">Stratégie ${a.strategie} · ${esc(nomDecl(a))} sur ${tfn(a.tf)} · bougie clôturée ${quand(a.heure)}</div>`;
+  const B = [];
+  if (a.strategie === 1) {
+    const lis = a.contexte.map(c => `<li><span class="ok">✓</span><span>${tfn(c.tf)} : structure ${long ? "haussière" : "baissière"}, clôture <span class="num">${prix(c.close)}</span> ${long ? "au-dessus" : "en dessous"} de l'EMA ${D.config.general.ema_lente} (<span class="num">${prix(c.ema50)}</span>)</span></li>`);
+    if (a.cassure) lis.push(`<li><span class="info">↳</span><span>Dernière cassure ${tfn(a.cassure.tf)} : ${a.cassure.type} ${long ? "au-dessus" : "en dessous"} de <span class="num">${prix(a.cassure.niv)}</span>, ${quand(a.cassure.t)}</span></li>`);
+    lis.push(`<li><span class="${a.volume_sens === true ? "ok" : a.volume_sens === false ? "ko" : "info"}">${a.volume_sens === true ? "✓" : a.volume_sens === false ? "✗" : "–"}</span><span>Volume dans le sens ${a.volume_sens == null ? ": pas encore de pullback" : a.volume_sens ? ": l'impulsion a plus de volume que le pullback" : ": le pullback a plus de volume que l'impulsion"} <span class="info">(information, ne bloque pas)</span></span></li>`);
+    B.push(bloc("Contexte", `<ul>${lis.join("")}</ul>`));
+  } else {
+    B.push(bloc("Contexte", `<ul><li><span class="ok">✓</span><span>Prix sur une zone HTF majeure, sweep du swing le plus proche avec clôture de retour</span></li>
+      <li><span class="info">↳</span><span>Tendance D1 ${a.tendance_d1} : ce retournement ${long ? "haussier" : "baissier"} est du contre-tendance, grade B</span></li>
+      ${a.sweep ? `<li><span class="info">↳</span><span>Swing <span class="num">${prix(a.sweep.niv)}</span> (${quandCourt(a.sweep.piv_t)}) balayé ${quand(a.sweep.t)}, mèche à <span class="num">${prix(a.sweep.meche)}</span></span></li>` : ""}</ul>`));
+  }
+  const zl = a.zones.map(z => `<div class="ligne-prix"><span><span class="etiq" style="color:${couleurZone(z.type)}">${esc(z.type)} ${tfn(z.tf)}</span> ${esc(z.type === "Fibo" ? nomFibo(z) : (NOM_ZONE[z.type] || ""))}</span><span class="num">${z.lo === z.hi ? prix(z.lo) : prix(z.lo) + " – " + prix(z.hi)}</span></div>`).join("");
+  const grade = a.strategie === 1 ? `<p class="note">${a.familles.length >= 2 ? `${a.familles.length} types de zone superposés → grade A, risque prévu par ton plan : 1 %` : "1 type de zone → grade B, risque prévu par ton plan : 0,5 %"}</p>`
+    : `<p class="note">Retournement → grade B, risque prévu par ton plan : 0,5 %</p>`;
+  B.push(bloc(a.strategie === 1 ? "Zones" : "Zone HTF", zl + grade));
+  const dl = a.declencheurs.map(x => `<li><span class="${a.niveau === "setup" ? "ok" : "info"}">${a.niveau === "setup" ? "✓" : "…"}</span><span>${esc(texteDecl(x, a))}</span></li>`).join("");
+  B.push(bloc(a.niveau === "setup" ? "Déclencheur" : "Ce qui se prépare", `<ul>${dl}${(a.notes || []).map(n => `<li><span class="info">•</span><span>${esc(n)}</span></li>`).join("")}</ul>`));
+  B.push(bloc("Les 3 questions · à toi", blocMoi(a)));
+  const fz = a.zones.filter(z => z.fibo);
+  if (fz.length) {
+    const z = fz[0], H = z.fibo.fin.p, L = z.fibo.debut.p, cfg = D.config.strat1, [g0, g1] = cfg.fibo_golden;
+    const touches = new Set(fz.flatMap(x => x.niveau || []));
+    B.push(bloc("Fibo utilisé", `
+      <div class="ligne-prix"><span>Départ (${tfn(z.tf)}) · ${quand(z.fibo.debut.t)}</span><span class="num">${prix(L)}</span></div>
+      <div class="ligne-prix"><span>Arrivée (${tfn(z.tf)}) · ${quand(z.fibo.fin.t)}</span><span class="num">${prix(H)}</span></div>
+      ${cfg.fibo_niveaux.map(r => `<div class="ligne-prix"><span>${fiboTexte(r)}${r >= g0 && r <= g1 ? " · golden zone" : ""}${touches.has(r) ? " · <b class='ok'>zone du déclencheur</b>" : ""}</span><span class="num">${prix(H - r * (H - L))}</span></div>`).join("")}`));
+  }
+  if (a.niveau === "prepa") B.push(bloc("Suivi", `<p class="info">${a.statut === "devenue setup" ? "Devenue un setup 🟢" : a.statut === "expirée" ? `Expirée après ${D.config.alertes.pre_alerte_heures} h sans déclencheur` : "En cours"}</p>`));
+  B.push(bloc("Aperçu Telegram", `<div class="telegram">${telegram(a)}</div>`));
+  document.getElementById("fiche").innerHTML = B.join("");
+}
+function blocMoi(a) {
+  const m = niveauxDe(a), ent = m.entree ?? a.entree, long = a.sens === "long";
+  const champ = (k, nom, aide) => `<div class="saisie"><label for="m-${k}">${nom}<br><span class="info" style="font-size:11.5px">${aide}</span></label>
+    <input id="m-${k}" type="number" step="0.1" inputmode="decimal" data-moi="${k}" value="${m[k] ?? (k === "entree" ? a.entree : "")}" placeholder="prix">
+    <button type="button" data-placer="${k}" aria-pressed="${etat.placement === k}" title="Placer sur le graphique" aria-label="Placer ${nom} sur le graphique">📍</button></div>`;
+  let rr = "", res = "";
+  if (m.sl != null && m.tp1 != null && ent != null) {
+    const risque = long ? ent - m.sl : m.sl - ent, gain = long ? m.tp1 - ent : ent - m.tp1;
+    rr = risque > 0 ? `<div class="ligne-prix"><span>R:R jusqu'au TP1</span><span class="num">${nf2.format(gain / risque)}</span></div>` : `<p class="note ko">L'invalidation doit être ${long ? "sous" : "au-dessus de"} l'entrée.</p>`;
+    res = resultat(a, m, long);
+  }
+  return `<p class="note" style="margin:0 0 6px">Où j'entre, où j'ai tort, où est mon TP : c'est toi qui les places. Tape le prix, ou clique 📍 puis sur le graphique.</p>
+    ${champ("entree", "Où j'entre", "proposé : clôture du déclencheur")}${champ("sl", "Où j'ai tort", "invalidation")}${champ("tp1", "Où est mon TP", "TP1")}${champ("tp2", "TP2", "facultatif")}
+    ${rr}${res}
+    <div class="actions" style="margin-top:6px"><button class="btn" type="button" id="effacer-moi">Effacer mes niveaux</button></div>
+    <p class="note">${enLigne() && GH.jeton ? "Enregistré dans ton dépôt GitHub : tu les retrouves sur tous tes appareils." : enLigne() ? "Enregistré dans ce navigateur. Ajoute ton jeton GitHub dans Paramètres pour les retrouver sur tous tes appareils." : "Enregistré dans ce navigateur. En ligne, ils seront aussi enregistrés dans ton dépôt GitHub, comme les paramètres."}</p>`;
+}
+function resultat(a, m, long) {
+  // Sur les bougies du timeframe affiché, après l'alerte : TP1 ou invalidation touché en premier (en mèche).
+  if (!rows.length || D.meta.tf_absents.includes(etat.tf)) return "";
+  const i0 = indexDe(P(a.bougie)) + 1;
+  for (let i = i0; i < rows.length; i++) {
+    const t = rows[i][0], h = rows[i][2], l = rows[i][3];
+    const tp = long ? h >= m.tp1 : l <= m.tp1, sl = long ? l <= m.sl : h >= m.sl;
+    if (tp && sl) return `<p class="note">TP1 et invalidation touchés dans la même bougie ${tfn(etat.tf)} (${quand(t)}) : ordre inconnu à ce timeframe.</p>`;
+    if (tp) return `<p class="note ok">TP1 touché ${quand(t)} (bougies ${tfn(etat.tf)}).</p>`;
+    if (sl) return `<p class="note ko">Invalidation touchée en mèche ${quand(t)} (bougies ${tfn(etat.tf)}).</p>`;
+  }
+  return `<p class="note">Ni TP1 ni invalidation touchés jusqu'à la fin des données.</p>`;
+}
+function bloc(t, html) { return `<section class="carte bloc"><h2>${t}</h2>${html}</section>`; }
+function texteDecl(x, a) {
+  const long = a.sens === "long";
+  switch (x.nom) {
+    case "Reclaim": return `Reclaim : mèche ${long ? "sous" : "au-dessus de"} la zone puis clôture de retour dedans${x.liquidite ? `, liquidité prise ${long ? "sous le swing low" : "au-dessus du swing high"} ${prix(x.liquidite.niv)}` : ""}${x.emas && x.emas.length ? `, ${x.emas.join(" et ")} touchée puis reprise` : ""}`;
+    case "Bougie de rejet": return `Bougie de rejet : ${x.forme}${x.forme === "pin bar" ? ` (mèche ${long ? "basse" : "haute"} > 50 % de la bougie)` : ""}, clôturée dans la zone`;
+    case "Reprise de l'EMA": return `Reprise de l'EMA : clôture de retour ${long ? "au-dessus" : "en dessous"} de l'${x.emas.join(" et l'")}, dans la zone`;
+    case "Divergence RSI": return `Divergence RSI classique : ${long ? "creux" : "sommet"} ${prix(x.p2.p)} ${long ? "plus bas" : "plus haut"} que ${prix(x.p1.p)}, RSI ${long ? "plus haut" : "plus bas"} (${nf.format(x.p1.rsi)} → ${nf.format(x.p2.rsi)})`;
+    case "Divergence RSI cachée": return `Divergence RSI cachée : ${long ? "creux" : "sommet"} ${prix(x.p2.p)} ${long ? "plus haut" : "plus bas"} que ${prix(x.p1.p)}, RSI ${long ? "plus bas" : "plus haut"} (${nf.format(x.p1.rsi)} → ${nf.format(x.p2.rsi)}) : signal de continuation`;
+    case "CHoCH": return `CHoCH clôturé : clôture ${long ? "au-dessus du dernier swing high" : "sous le dernier swing low"} ${prix(x.niv)}`;
+    case "Cassure du drapeau (retest)": return `Drapeau cassé ${quand(x.cassure.t)} puis retest de la droite ${quand(x.retest_t)}`;
+    case "Cassure du wedge (retest)": return `Wedge cassé ${quand(x.cassure.t)} puis retest de la droite ${quand(x.retest_t)}`;
+    case "Cassure du drapeau — en attente du retest": return "Drapeau cassé, en attente du retest de la droite";
+    case "Cassure du wedge — en attente du retest": return "Wedge cassé, en attente du retest de la droite";
+    case "Prix dans la zone": return "Contexte bon et prix dans la zone, aucun déclencheur clôturé pour l'instant";
+    case "Sweep sur zone HTF — en attente du déclencheur": return "Sweep fait sur la zone HTF, en attente d'une divergence, d'un CHoCH ou d'une cassure de wedge";
+    default: return x.nom;
+  }
+}
+function telegram(a) {
+  const long = a.sens === "long";
+  const tete = a.niveau === "setup" ? "🟢 <b>Setup détecté</b> — BTC" : "🟡 <b>En préparation</b> — BTC";
+  const l2 = `${NOMS_STRAT[a.strategie]} (S${a.strategie}) · ${long ? "LONG" : "SHORT"}${a.niveau === "setup" ? ` · grade ${a.grade}` : ""}`;
+  const l3 = `${esc(nomDecl(a))} · ${tfn(a.tf)} · clôture ${quand(a.heure)}`;
+  const l4 = `Zone : ${esc(a.zones.map(z => z.type + " " + tfn(z.tf)).join(" + "))}`;
+  const notes = (a.notes || []).map(n => "• " + esc(n)).join("\n");
+  return `${tete}\n${l2}\n${l3}\n${l4}${notes ? "\n" + notes : ""}\n<a href="#${a.id}">→ Voir le graphique</a>`;
+}
+
+// ------------------------------------------------------------------ fréquence
+function pageFrequence() {
+  const F = D.frequence, el = document.getElementById("frequence");
+  const debut = new Date(F.debut * 1000).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const fin = new Date(F.fin * 1000).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const max = Math.max(...F.blocs.flatMap(b => b.lignes.map(l => l.par_semaine || 0)));
+  const tab = b => `<div class="carte tableau"><table><thead><tr><th>Stratégie ${b.strategie} · ${NOMS_STRAT[b.strategie]}</th><th>Alertes</th><th>Par semaine</th></tr></thead><tbody>${
+    b.lignes.map(l => `<tr class="${l.titre ? "titre" : ""}"><td>${esc(l.nom.replace(/\bH(\d+)\b/, (_, n) => n + "h"))}</td><td class="num">${nf0.format(l.n)}</td><td class="num">${nf.format(l.par_semaine)}<span class="barre-pct" style="width:${Math.round((l.par_semaine || 0) / max * 90)}px"></span></td></tr>`).join("")}</tbody></table></div>`;
+  el.innerHTML = `<h1>Fréquence des alertes</h1>
+    <p>Nombre d'alertes que le détecteur aurait envoyées avec les réglages actuels, de ${debut} à ${fin} (${nf.format(F.semaines)} semaines). L'invalidation et les TP étant les tiens, il n'y a plus de résultat automatique : quand tu places tes niveaux sur une alerte, sa fiche indique lequel a été touché en premier.</p>
+    ${F.blocs.map(tab).join("")}`;
+}
+
+// ------------------------------------------------------------------ paramètres
+const lire = (o, ch) => ch.split(".").reduce((x, k) => x == null ? x : x[k], o);
+function ecrireVal(o, ch, v) { const k = ch.split("."); let x = o; for (let i = 0; i < k.length - 1; i++) x = x[k[i]]; x[k[k.length - 1]] = v; }
+let cfgEdit = null;
+function pageParams() {
+  cfgEdit = JSON.parse(JSON.stringify(D.config));
+  const f = document.getElementById("params");
+  f.innerHTML = D.schema.map(g => `<fieldset><legend>${esc(g.groupe)}</legend>${g.champs.map(champ).join("")}</fieldset>`).join("");
+  marquer();
+}
+function champ(c) {
+  const v = lire(D.config, c.chemin), id = "p-" + c.chemin.replace(/\./g, "-");
+  let input;
+  if (c.type === "bool") input = `<input type="checkbox" id="${id}" data-ch="${c.chemin}" data-type="bool" ${v ? "checked" : ""}>`;
+  else if (c.type.startsWith("choix:")) input = `<select id="${id}" data-ch="${c.chemin}" data-type="choix">${c.type.slice(6).split("|").map(o => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`;
+  else if (c.type.startsWith("liste:")) input = `<span class="multi">${c.type.slice(6).split("|").map((o, i) => `<label><input type="checkbox" id="${id}-${i}" value="${o}" data-ch="${c.chemin}" data-type="liste" ${v.includes(o) ? "checked" : ""}>${tfn(o)}</label>`).join("")}</span>`;
+  else if (c.type === "nombres") input = `<input type="text" id="${id}" data-ch="${c.chemin}" data-type="nombres" value="${v.map(x => String(x).replace(".", ",")).join(" ; ")}">`;
+  else input = `<input type="number" id="${id}" data-ch="${c.chemin}" data-type="${c.type}" value="${v}" step="${c.type === "int" ? 1 : 0.001}">`;
+  return `<div class="champ" data-chemin="${c.chemin}"><label for="${id}">${esc(c.libelle)}</label>${input}${c.aide ? `<span class="aide">${esc(c.aide)}</span>` : ""}</div>`;
+}
+function majParam(e) {
+  const el = e.target.closest("[data-ch]"); if (!el) return;
+  const ch = el.dataset.ch, typ = el.dataset.type, f = document.getElementById("params");
+  let v;
+  if (typ === "bool") v = el.checked;
+  else if (typ === "liste") v = [...f.querySelectorAll(`[data-ch="${ch}"]`)].filter(x => x.checked).map(x => x.value);
+  else if (typ === "int") v = parseInt(el.value, 10);
+  else if (typ === "float") v = parseFloat(el.value);
+  else if (typ === "nombres") v = el.value.split(/[;\s]+/).map(x => parseFloat(x.replace(",", "."))).filter(x => !isNaN(x));
+  else v = el.value;
+  ecrireVal(cfgEdit, ch, v);
+  marquer();
+}
+function marquer() {
+  let n = 0;
+  document.querySelectorAll(".champ").forEach(el => {
+    const ch = el.dataset.chemin, m = JSON.stringify(lire(cfgEdit, ch)) !== JSON.stringify(lire(D.config, ch));
+    el.classList.toggle("modifie", m); n += m;
+  });
+  const pret = enLigne() && GH.jeton;
+  document.getElementById("enregistrer").disabled = !(pret && n);
+  document.getElementById("nb-modifs").textContent = n ? `${n} réglage${n > 1 ? "s" : ""} modifié${n > 1 ? "s" : ""}${pret ? "" : enLigne() ? " : ajoute ton jeton GitHub ci-dessus pour enregistrer" : " (pas enregistré" + (n > 1 ? "s" : "") + " dans la maquette)"}` : "Valeurs actuelles du détecteur";
+}
+
+// ------------------------------------------------------------------ navigation
+function choisir(id, recentrer = true) {
+  const a = D.alertes.find(x => x.id === id);
+  if (!a) return;
+  etat.a = a; etat.placement = null; document.getElementById("consigne").hidden = true;
+  fiche();
+  liste();
+  const tf = recentrer ? a.tf : etat.tf;
+  if (tf !== etat.tf || !rows.length) choisirTF(tf, true); else { dessiner(); if (recentrer) centrer(); }
+}
+function boutonsTF() {
+  document.getElementById("tfs").innerHTML = D.meta.tf_affichage.map(tf => `<button data-tf="${tf}" aria-pressed="${tf === etat.tf}" class="${D.meta.tf_absents.includes(tf) ? "absent" : ""}" title="${D.meta.tf_absents.includes(tf) ? "Pas de données dans la maquette" : ""}">${tfn(tf)}</button>`).join("");
+}
+function vue(nom) {
+  for (const v of ["alertes", "frequence", "parametres"]) {
+    document.getElementById("vue-" + v).hidden = v !== nom;
+    document.getElementById("t-" + v).setAttribute("aria-selected", v === nom);
+  }
+  if (nom === "alertes" && chart) requestAnimationFrame(() => centrer());
+}
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (h === "frequence" || h === "parametres") { vue(h); return; }
+  vue("alertes");
+  if (h && D.alertes.some(a => a.id === h) && (!etat.a || etat.a.id !== h)) choisir(h);
+}
+
+function init(d) {
+  D = d;
+  document.getElementById("symbole").textContent = `${d.meta.symbole} perp`;
+  document.getElementById("fraicheur").textContent = `Données jusqu'au ${quand(d.meta.donnees_jusqu_a)}`;
+  if (!d.meta.maquette) {
+    const pa = document.getElementById("pastille");
+    pa.classList.add("direct");
+    pa.innerHTML = `<i></i>En direct · vérifié ${new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(d.meta.derniere_verification * 1000)).replace(",", "")}`;
+    pa.title = `Source : ${d.meta.source}`;
+    document.getElementById("intro-params").textContent = "Tout ce que le détecteur utilise est réglable ici. « Enregistrer » écrit tes réglages dans ton dépôt GitHub ; le détecteur les applique à la vérification suivante (au plus une heure), ou tout de suite avec « Lancer la vérification maintenant ».";
+  }
+  if (enLigne()) {
+    document.getElementById("connexion").hidden = false;
+    document.getElementById("nom-depot").textContent = d.meta.depot.split("/")[1];
+    const etatJeton = () => { document.getElementById("etat-jeton").textContent = GH.jeton ? "Jeton enregistré dans ce navigateur." : "Aucun jeton : les paramètres ne peuvent pas être enregistrés."; marquer(); document.getElementById("lancer").hidden = !GH.jeton; };
+    document.getElementById("garder-jeton").addEventListener("click", async () => {
+      const j = document.getElementById("jeton").value.trim(); if (!j) return;
+      GH.jeton = j; document.getElementById("jeton").value = "";
+      try { await gh("GET", ""); try { localStorage.setItem(CLE_JETON, j); } catch (e) { /* navigateur sans stockage */ } etatJeton(); chargerMoiDepot(); }
+      catch (e) { GH.jeton = ""; document.getElementById("etat-jeton").innerHTML = `<span class="msg-ko">GitHub refuse ce jeton (${esc(e.message)}). Vérifie qu'il donne accès au dépôt ${esc(d.meta.depot.split("/")[1])}.</span>`; }
+    });
+    document.getElementById("oublier-jeton").addEventListener("click", () => { GH.jeton = ""; try { localStorage.removeItem(CLE_JETON); } catch (e) { /* rien */ } etatJeton(); });
+    document.getElementById("enregistrer").addEventListener("click", async () => {
+      const el = document.getElementById("nb-modifs");
+      el.textContent = "Enregistrement…";
+      try {
+        await ecrireFichier("config.json", JSON.stringify(cfgEdit, null, 1) + "\n", "Paramètres modifiés depuis le dashboard");
+        D.config = JSON.parse(JSON.stringify(cfgEdit)); marquer();
+        el.innerHTML = `<span class="msg-ok">Enregistré dans ton dépôt. Appliqué à la prochaine vérification.</span>`;
+      } catch (e) { el.innerHTML = `<span class="msg-ko">Pas enregistré : ${esc(e.message)}.</span>`; }
+    });
+    document.getElementById("lancer").addEventListener("click", async () => {
+      const el = document.getElementById("nb-modifs");
+      try { await gh("POST", "actions/workflows/detecteur.yml/dispatches", { ref: "main" }); el.innerHTML = `<span class="msg-ok">Vérification lancée : le dashboard sera à jour dans 3 à 5 minutes.</span>`; }
+      catch (e) { el.innerHTML = `<span class="msg-ko">Lancement impossible : ${esc(e.message)}.</span>`; }
+    });
+    etatJeton();
+    chargerMoiDepot();
+  }
+  document.getElementById("calques").innerHTML = CALQUES.map(([k, n]) => `<label><input type="checkbox" id="c-${k}" data-c="${k}" checked>${n}</label>`).join("");
+  document.getElementById("profil-choix").addEventListener("click", e => {
+    const b = e.target.closest("[data-profil]"); if (!b) return;
+    etat.profil = b.dataset.profil;
+    document.querySelectorAll("[data-profil]").forEach(x => x.setAttribute("aria-pressed", x === b));
+    dessiner();
+    if (etat.profil === "fin" && temps.length) chart.timeScale().scrollToPosition(8, false);
+    else if (etat.profil === "alerte") centrer();
+  });
+  creerGraph();
+  pageFrequence();
+  pageParams();
+  document.getElementById("items").addEventListener("click", e => {
+    if (e.target.id === "plus") { etat.nb += 200; liste(); return; }
+    const b = e.target.closest(".item"); if (b) { history.replaceState(null, "", "#" + b.dataset.id); choisir(b.dataset.id); }
+  });
+  document.getElementById("tfs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) choisirTF(b.dataset.tf, true); });
+  document.getElementById("calques").addEventListener("change", e => { etat.calques[e.target.dataset.c] = e.target.checked; afficherTF(false); });
+  for (const [id, cle] of [["f-niveau", "niveau"], ["f-strat", "strat"], ["f-sens", "sens"]]) {
+    document.getElementById(id).addEventListener("click", e => {
+      const b = e.target.closest(".puce"); if (!b) return;
+      etat[cle] = b.dataset.v; etat.nb = 200;
+      document.querySelectorAll(`#${id} .puce`).forEach(x => x.setAttribute("aria-pressed", x === b));
+      liste(); dessiner();
+    });
+  }
+  document.getElementById("fiche").addEventListener("change", e => {
+    const k = e.target.dataset.moi; if (!k || !etat.a) return;
+    const m = MOI[etat.a.id] || {}, v = parseFloat(String(e.target.value).replace(",", "."));
+    if (isNaN(v)) delete m[k]; else m[k] = v;
+    MOI[etat.a.id] = m; ecrireMoi(MOI); fiche(); dessiner(); liste();
+  });
+  document.getElementById("fiche").addEventListener("click", e => {
+    if (e.target.id === "effacer-moi") { delete MOI[etat.a.id]; ecrireMoi(MOI); fiche(); dessiner(); liste(); return; }
+    const b = e.target.closest("[data-placer]"); if (!b) return;
+    etat.placement = etat.placement === b.dataset.placer ? null : b.dataset.placer;
+    const cons = document.getElementById("consigne");
+    cons.textContent = "Clique sur le graphique au prix voulu"; cons.hidden = !etat.placement;
+    document.querySelectorAll("[data-placer]").forEach(x => x.setAttribute("aria-pressed", x.dataset.placer === etat.placement));
+    if (etat.placement) document.getElementById("graph").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  document.getElementById("params").addEventListener("change", majParam);
+  document.querySelector(".onglets").addEventListener("click", e => { const b = e.target.closest("button"); if (b) location.hash = b.dataset.vue === "alertes" ? (etat.a ? etat.a.id : "") : b.dataset.vue; });
+  document.getElementById("reinit").addEventListener("click", () => pageParams());
+  window.addEventListener("hashchange", route);
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  if (mq.addEventListener) mq.addEventListener("change", couleursGraph);
+  new MutationObserver(couleursGraph).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  const h = decodeURIComponent(location.hash.slice(1));
+  const depart = D.alertes.find(a => a.id === h) || D.alertes.slice().reverse().find(a => a.niveau === "setup" && a.familles.includes("Fibo"))
+    || D.alertes.slice().reverse().find(a => a.niveau === "setup") || D.alertes[D.alertes.length - 1];
+  if (depart) choisir(depart.id);
+  route();
+}
+fetch("donnees/alertes.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(init).catch(e => {
+  document.getElementById("vue-alertes").innerHTML = `<p class="erreur">Les données du détecteur n'ont pas pu être chargées (${esc(e.message)}). Recharge la page ; si le problème continue, la dernière vérification a peut-être échoué.</p>`;
+});
+</script>
+
+</body>
+</html>
