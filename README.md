@@ -3,7 +3,9 @@
 Détecteur des deux setups du plan de trading d'Enzo (continuation et retournement) sur BTCUSDT perp.
 Il ne prend aucun trade : il prévient sur Telegram et montre sur le dashboard où il a vu le setup.
 
-- **Dashboard** : https://infossienzo-ui.github.io/detecteur-btc/
+- **Dashboard** : https://infossienzo-ui.github.io/detecteur-btc/ — graphique en direct : la page lit elle-même les
+  bougies Binance perp et suit leur flux temps réel (tous les timeframes, de 1m à D) ; elle recharge les alertes dès
+  qu'une vérification en a trouvé de nouvelles.
 - **Vérification** : toutes les heures, 2 minutes après l'heure pleine (GitHub Actions, onglet *Actions*).
 - **Alertes** : 🟢 setup détecté (un déclencheur clôturé), 🟡 en préparation (contexte bon, rien de clôturé).
 
@@ -31,5 +33,10 @@ Il ne prend aucun trade : il prévient sur Telegram et montre sur le dashboard o
 
 ## Sources des bougies
 
-Coinalyze (bougies du perp Binance, clé requise), sinon l'API Binance perp, sinon Binance spot. Les serveurs de GitHub
-sont aux États-Unis, où l'API Binance est souvent bloquée : Coinalyze est la source principale.
+Détection : Coinalyze (bougies du perp Binance, clé requise), sinon l'API Binance perp, sinon Binance spot. Les serveurs
+de GitHub sont aux États-Unis, où l'API Binance est bloquée : Coinalyze est la source principale.
+
+Graphique du dashboard : bougies du détecteur pour l'historique, puis Binance perp lu par ton navigateur (REST pour les
+dernières bougies, WebSocket `/market` pour le temps réel). Si le flux est bloqué, la page relève les bougies toutes les
+10 s ; si Binance perp ne répond pas, elle prend Binance spot et l'indique ; sans Binance, elle montre les bougies de la
+dernière vérification.

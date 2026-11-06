@@ -298,7 +298,8 @@ def main():
     freq = export_web.frequence(alertes, int(debut.value), fin_ns)
     meta = {"maquette": False, "derniere_verification": int(maintenant.value // NS), "depot": depot, "url": url,
             "source": source or "aucune source perp joignable à cette vérification (historique inchangé)",
-            "sources_bas_tf": sources_bas,
+            "sources_bas_tf": sources_bas, "cle_coinalyze": bool(os.environ.get("COINALYZE_API_KEY")),
+            "telegram": bool(os.environ.get("TELEGRAM_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")),
             "message_absents": "Bougies indisponibles à cette vérification : la source n'a pas répondu."}
     export_web.ecrire_tout(M, alertes, int((h1.index[-1] - pd.Timedelta(days=365)).value), fin_ns, cfg, freq,
                            str(DOSSIER_SITE), meta["source"], meta_extra=meta, bas_tf=bas)

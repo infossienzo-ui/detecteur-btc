@@ -89,6 +89,9 @@ def ecrire_tout(moteur, alertes, depuis_ns, fin_ns, cfg, freq, dossier, source, 
     with open(os.path.join(dossier, "alertes.json"), "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, separators=(",", ":"))
     tailles["alertes"] = os.path.getsize(os.path.join(dossier, "alertes.json"))
+    # petit fichier relu par la page toutes les deux minutes : elle ne recharge alertes.json que s'il a changé
+    with open(os.path.join(dossier, "version.json"), "w", encoding="utf-8") as f:
+        json.dump({"genere": meta["genere"], "donnees_jusqu_a": meta["donnees_jusqu_a"]}, f)
     for tf in TF_AFFICHAGE:
         if tf in TF_MINUTES:
             if tf not in bas_tf:

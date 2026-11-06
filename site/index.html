@@ -59,7 +59,19 @@ button { cursor: pointer; }
 .etat { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pastille { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); font-size: 11.5px; white-space: nowrap; }
 .pastille i { width: 7px; height: 7px; border-radius: 50%; background: var(--prepa); display: inline-block; }
-.pastille.direct i { background: var(--long); }
+.pastille.direct i, .pastille.ok i { background: var(--long); }
+.pastille.coupe i { background: var(--muted); }
+.pastille.ko { color: var(--short); } .pastille.ko i { background: var(--short); }
+.pastille.alerte { color: var(--prepa); border-color: currentColor; font-weight: 600; } .pastille.alerte i { background: var(--prepa); }
+.pastille b { font-family: var(--f-chiffres); font-weight: 500; color: var(--ink); }
+.pastille.vivant i { animation: pouls 2s ease-out infinite; }
+@keyframes pouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--long) 60%, transparent); } 80%, 100% { box-shadow: 0 0 0 6px transparent; } }
+.ligne-outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn-mini { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.annonce { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 20; display: flex; gap: 10px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--setup); border-radius: 10px; padding: 8px 10px 8px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+  width: max-content; max-width: calc(100vw - 32px); font-size: 13.5px; font-weight: 600; }
+.annonce .btn { padding: 5px 12px; }
 .connexion { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
 .connexion h2 { font-family: var(--f-titre); font-size: 15px; margin: 0; }
 .connexion ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; }
@@ -171,7 +183,7 @@ tr.titre td { font-weight: 600; background: var(--panel-2); }
   .items { max-height: 420px; }
   .etat { margin-left: 0; }
 }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } .pastille.vivant i { animation: none; } }
 </style>
 </head>
 <body>
@@ -184,7 +196,7 @@ tr.titre td { font-weight: 600; background: var(--panel-2); }
       <button role="tab" id="t-frequence" aria-selected="false" data-vue="frequence">Fréquence</button>
       <button role="tab" id="t-parametres" aria-selected="false" data-vue="parametres">Paramètres</button>
     </nav>
-    <div class="etat"><span class="pastille" id="pastille"><i></i>Maquette sur données réelles</span><span id="fraicheur" class="num"></span></div>
+    <div class="etat"><span class="pastille coupe" id="direct" hidden><i></i>Connexion au direct…</span><span class="pastille" id="pastille"><i></i>Maquette sur données réelles</span><span id="fraicheur" class="num"></span></div>
   </div>
 </header>
 
@@ -218,7 +230,8 @@ tr.titre td { font-weight: 600; background: var(--panel-2); }
         <div class="carte">
           <div class="titre-alerte" id="titre"></div>
           <div class="outils">
-            <div class="groupe-tf" id="tfs" role="group" aria-label="Timeframe du graphique"></div>
+            <div class="ligne-outils"><div class="groupe-tf" id="tfs" role="group" aria-label="Timeframe du graphique"></div>
+              <button class="btn-mini" type="button" id="aller-direct" hidden>Aller au direct ⇥</button></div>
             <div class="calques" id="calques"></div>
             <div class="profil-choix" id="profil-choix"><b>Profil de volume :</b>
               <span class="seg" role="group" aria-label="Profil de volume">
@@ -271,6 +284,7 @@ tr.titre td { font-weight: 600; background: var(--panel-2); }
     </div>
   </section>
 </main>
+<div class="annonce" id="annonce" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
@@ -389,10 +403,12 @@ class Calque {
   dessiner(cible, couche) {
     const ts = this.chart.timeScale(), s = this.serie;
     cible.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
-      const x = l => ts.logicalToCoordinate(l);
+      const xr = l => ts.logicalToCoordinate(l);
       const y = p => s.priceToCoordinate(p);
-      const x0 = x(0), x1 = x(1);
+      const x0 = xr(0), x1 = xr(1);
       const ecart = (x0 != null && x1 != null) ? Math.max(1, x1 - x0) : 6;
+      // indice fractionnaire (entre deux bougies, ou après la dernière) : le graphique ne place que des indices entiers
+      const x = l => { const i = Math.floor(l), xi = xr(i); return xi == null ? null : xi + (l - i) * ecart; };
       const W = mediaSize.width;
       // une zone part de son origine (à gauche) et va vers la droite : jusqu'à la bougie qui la comble, sinon jusqu'au bord
       const xD = t => t == null ? W : x(logique(t));
@@ -426,6 +442,13 @@ class Calque {
           ctx.fillStyle = o.c; ctx.beginPath(); ctx.arc(xa, ya, o.r || 4, 0, 2 * Math.PI); ctx.fill();
           ctx.strokeStyle = tok("--panel"); ctx.lineWidth = 1.5; ctx.stroke();
           if (o.label) etiquette(ctx, o.label, xa, ya, o.c, o.pos || "haut");
+        } else if (o.k === "vline") {
+          // trait vertical sur toute la hauteur (fin des bougies analysées par la détection)
+          const xa = x(logique(o.t) - 0.5);
+          if (xa == null || xa < 0 || xa > W) continue;
+          ctx.strokeStyle = o.c; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+          ctx.beginPath(); ctx.moveTo(xa + .5, 0); ctx.lineTo(xa + .5, mediaSize.height); ctx.stroke(); ctx.setLineDash([]);
+          if (o.label) etiquette(ctx, o.label, xa, 20, o.c, "gauche");
         } else if (o.k === "fvg") {
           // comme ton indicateur : boîte sur la bougie du milieu et la suivante ; une FVG comblée par une mèche disparaît
           let n = 0;
@@ -476,8 +499,9 @@ function atrTF() {
 }
 function calculerFVG() {
   // Comme ton indicateur FVG : boîte posée sur la bougie du milieu, effacée quand une mèche la comble entièrement.
-  const out = [], atr = atrTF(), k = D.config.strat1.fvg_min_atr, n = rows.length;
-  for (let i = 2; i < n; i++) {
+  // En direct, la bougie en cours ne forme pas de FVG (elle peut encore changer) mais peut en combler une.
+  const out = [], atr = atrTF(), k = D.config.strat1.fvg_min_atr, n = rows.length, nf = n - (enCours() ? 1 : 0);
+  for (let i = 2; i < nf; i++) {
     const h2 = rows[i - 2][2], l2 = rows[i - 2][3], h0 = rows[i][2], l0 = rows[i][3];
     let f = null;
     if (l0 > h2 && l0 - h2 >= k * atr[i]) f = { h: true, lo: h2, hi: l0 };
@@ -489,6 +513,13 @@ function calculerFVG() {
   }
   return out;
 }
+function comblerFVG() {
+  // bougie en cours : ses mèches ne font que s'allonger, une FVG qu'elle comble le reste
+  const j = rows.length - 1, r = rows[j];
+  if (!r) return;
+  for (const f of fvgs) if (f.comble == null && j > f.i1 + 1 && (f.h ? r[3] <= f.lo : r[2] >= f.hi)) f.comble = j;
+}
+const enCours = () => !!rows.length && !!cacheTF[etat.tf] && !!cacheTF[etat.tf].direct && rows[rows.length - 1][0] + DUREE[etat.tf] > Date.now() / 1000;
 function profilJS(iFin, jours) {
   // Même calcul que le détecteur : bougies du timeframe sur la période, volume réparti entre plus bas et plus haut.
   const pr = D.config.profil, N = pr.niveaux;
@@ -549,31 +580,276 @@ function couleursGraph() {
   rsiSerie.applyOptions({ color: tok("--rsi") });
   afficherTF(false);
 }
-async function chargerBougies(tf) {
-  if (cacheTF[tf]) return cacheTF[tf];
-  const r = await fetch(`donnees/bougies_${tf}.json`, { cache: "no-store" });
+// ------------------------------------------------------------------ direct : bougies lues par la page chez Binance, puis flux temps réel
+// La détection tourne sur GitHub une fois par heure ; le graphique, lui, suit le marché à la seconde. Binance ne bloque
+// que les serveurs américains de GitHub, pas ton navigateur : la page charge les dernières bougies perp, puis s'abonne à
+// leur flux. Les bougies plus anciennes viennent des fichiers du détecteur (mêmes bougies perp, mêmes EMA et RSI).
+// Adresses du flux : celle de Binance depuis avril 2026 (« /market » pour les bougies perp) en premier ; si une adresse ne
+// donne rien, la suivante est essayée à la reconnexion.
+const BN = {
+  perp: { nom: "Binance perp", rest: "https://fapi.binance.com/fapi/v1/klines", max: 1500,
+          ws: ["wss://fstream.binance.com/market/stream?streams=", "wss://fstream.binance.com/market/ws/", "wss://fstream.binance.com/ws/"] },
+  spot: { nom: "Binance spot", rest: "https://data-api.binance.vision/api/v3/klines", max: 1000,
+          ws: ["wss://data-stream.binance.vision/stream?streams=", "wss://data-stream.binance.vision/ws/", "wss://stream.binance.com:9443/ws/"] },
+};
+const INTERVALLE = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H2: "2h", H3: "1h", H4: "4h", H5: "1h", H6: "6h", H8: "8h", H12: "12h", D: "1d" };
+const AGREGE = new Set(["H3", "H5"]);                 // pas de bougies 3h ni 5h chez Binance : reconstruites depuis le 1h
+const PETITS = new Set(["M1", "M5", "M15", "M30"]);   // en direct, uniquement les bougies perp (les fichiers sont parfois en spot)
+const DIRECT = { ws: null, minuterie: null, essais: 0, dernier: 0, prix: null, etat: "connexion", erreur: "", perpKo: 0, rattraper: false,
+                 adresse: { perp: 0, spot: 0 }, releve: 0, releveEnCours: false };
+const directPossible = () => !!D && !D.meta.maquette;
+const tfAbsent = tf => D.meta.maquette && D.meta.tf_absents.includes(tf);
+
+async function klinesDirect(intervalle, debut, source, limite) {
+  // source imposée pour compléter des bougies déjà chargées ; sinon perp, et spot si perp ne répond pas
+  const ordre = source ? [source] : Date.now() - DIRECT.perpKo < 600000 ? ["spot"] : ["perp", "spot"];
+  let err = null;
+  for (const s of ordre) {
+    try {
+      const n = Math.min(BN[s].max, limite || BN[s].max);
+      const u = `${BN[s].rest}?symbol=${D.meta.symbole}&interval=${intervalle}&limit=${n}${debut != null ? "&startTime=" + debut * 1000 : ""}`;
+      const r = await fetch(u, { cache: "no-store" });
+      if (!r.ok) throw new Error(`${BN[s].nom} répond ${r.status}`);
+      const j = await r.json();
+      if (!Array.isArray(j)) throw new Error(`${BN[s].nom} : réponse inattendue`);
+      return { source: s, barres: j.map(k => [Math.round(k[0] / 1000), +k[1], +k[2], +k[3], +k[4], +k[5]]) };
+    } catch (e) {
+      if (s === "perp") DIRECT.perpKo = Date.now();
+      err = e instanceof TypeError ? new Error(`${BN[s].nom} injoignable depuis ce navigateur`) : e;
+    }
+  }
+  throw err;
+}
+function seau(tf, t) {
+  if (tf === "H3") return t - t % 10800;
+  const j = t - t % 86400;   // 5h : 00, 05, 10, 15 et 20 h UTC chaque jour (la dernière dure 4 h), comme le détecteur
+  return j + Math.floor((t - j) / 18000) * 18000;
+}
+function agregerH(tf, h1) {
+  const out = [];
+  for (const r of h1) {
+    const s = seau(tf, r[0]), b = out[out.length - 1];
+    if (b && b[0] === s) { b[2] = Math.max(b[2], r[2]); b[3] = Math.min(b[3], r[3]); b[4] = r[4]; b[5] += r[5]; }
+    else out.push([s, r[1], r[2], r[3], r[4], r[5]]);
+  }
+  if (out.length && h1[0][0] !== out[0][0]) out.shift();   // premier seau incomplet (début du chargement) : les fichiers le couvrent
+  return out;
+}
+function calculerIndicateurs(d, depuis) {
+  // EMA et RSI comme le détecteur (moyennes exponentielles de pandas, RSI de Wilder) à partir de la ligne « depuis » ;
+  // les lignes plus anciennes gardent les valeurs du détecteur, calculées sur tout l'historique.
+  const L = d.lignes, n = L.length, g = D.config.general, ne = g.emas.length, per = g.rsi_periode;
+  d.ag = d.ag || []; d.al = d.al || [];
+  let i0 = Math.min(d.ag.length, depuis);
+  if (i0 === 0 && n) { d.ag[0] = 0; d.al[0] = 0; i0 = 1; }
+  for (let i = i0; i < n; i++) {
+    const x = L[i][4] - L[i - 1][4];
+    d.ag[i] = d.ag[i - 1] + (Math.max(x, 0) - d.ag[i - 1]) / per;
+    d.al[i] = d.al[i - 1] + (Math.max(-x, 0) - d.al[i - 1]) / per;
+  }
+  d.ag.length = n; d.al.length = n;
+  for (let i = Math.max(0, depuis); i < n; i++) {
+    const r = L[i], c = r[4];
+    g.emas.forEach((k, j) => { const p = i > 0 ? L[i - 1][6 + j] : null; r[6 + j] = p == null || isNaN(p) ? c : p + (c - p) * 2 / (k + 1); });
+    r[6 + ne] = d.al[i] === 0 ? 100 : 100 - 100 / (1 + d.ag[i] / d.al[i]);
+  }
+}
+async function construireDirect(tf, stat) {
+  const { source, barres } = await klinesDirect(INTERVALLE[tf]);
+  const directes = AGREGE.has(tf) ? agregerH(tf, barres) : barres;
+  if (!directes.length) throw new Error(`${BN[source].nom} : aucune bougie reçue`);
+  const ne = D.config.general.emas.length, t0 = directes[0][0];
+  const base = stat && !PETITS.has(tf) ? stat.lignes.filter(r => r[0] < t0) : [];
+  const d = { tf, lignes: base.concat(directes.map(r => r.concat(new Array(ne + 1).fill(null)))), direct: true, source, stat, sale: Infinity };
+  calculerIndicateurs(d, base.length);
+  if (AGREGE.has(tf)) d.h1 = barres.filter(r => seau(tf, r[0]) === directes[directes.length - 1][0]);
+  return d;
+}
+function chercher(L, t) { let a = 0, z = L.length - 1; while (a <= z) { const m = (a + z) >> 1; if (L[m][0] === t) return m; if (L[m][0] < t) a = m + 1; else z = m - 1; } return -1; }
+function appliquer(d, b) {
+  // bougie reçue : mise à jour de la bougie en cours, nouvelle bougie, ou correction d'une plus ancienne (rattrapage)
+  const L = d.lignes, n = L.length;
+  if (!n || b[0] > L[n - 1][0]) {
+    L.push(b.slice(0, 6).concat(new Array(D.config.general.emas.length + 1).fill(null)));
+    d.sale = Math.min(d.sale, n); calculerIndicateurs(d, n); return;
+  }
+  const i = b[0] === L[n - 1][0] ? n - 1 : chercher(L, b[0]);
+  if (i < 0) return;
+  for (let j = 1; j < 6; j++) L[i][j] = b[j];
+  d.sale = Math.min(d.sale, i); calculerIndicateurs(d, i);
+}
+async function rattraper(tf) {
+  // bougies manquées (flux coupé, onglet en veille, retour sur ce timeframe) : relues chez Binance
+  const d = cacheTF[tf];
+  if (!d || !d.direct) return;
+  const der = d.lignes[d.lignes.length - 1][0], pas = AGREGE.has(tf) ? 3600 : DUREE[tf], debut = AGREGE.has(tf) ? seau(tf, der) : der;
+  const manque = Math.ceil((Date.now() / 1000 - debut) / pas) + 2;
+  if (manque > BN[d.source].max - 20) { cacheTF[tf] = await construireDirect(tf, d.stat); return; }
+  const { barres } = await klinesDirect(INTERVALLE[tf], debut, d.source, manque + 3);
+  if (!AGREGE.has(tf)) { for (const b of barres) appliquer(d, b); return; }
+  const ag = agregerH(tf, barres);
+  for (const b of ag) appliquer(d, b);
+  if (ag.length) d.h1 = barres.filter(r => seau(tf, r[0]) === ag[ag.length - 1][0]);
+}
+function recevoir(tf, m) {
+  const k = m && m.k, d = cacheTF[tf];
+  if (!k || !d || !d.direct || etat.tf !== tf) return;
+  let b = [Math.round(k.t / 1000), +k.o, +k.h, +k.l, +k.c, +k.v];
+  DIRECT.prix = b[4]; DIRECT.dernier = Date.now();
+  if (AGREGE.has(tf)) {
+    // bougie 3h ou 5h en cours = les bougies 1h de son seau, dont celle qui vient d'arriver
+    const s = seau(tf, b[0]);
+    const h = (d.h1 || []).filter(r => seau(tf, r[0]) === s && r[0] !== b[0]).concat([b]).sort((u, v) => u[0] - v[0]);
+    d.h1 = h;
+    b = [s, h[0][1], Math.max(...h.map(r => r[2])), Math.min(...h.map(r => r[3])), h[h.length - 1][4], h.reduce((x, r) => x + r[5], 0)];
+  }
+  appliquer(d, b);
+  planifierRendu();
+}
+function ouvrirFlux() {
+  fermerFlux();
+  const tf = etat.tf, d = cacheTF[tf];
+  if (!d || !d.direct) { majDirect(); return; }
+  const src = d.source, adresses = BN[src].ws, ia = DIRECT.adresse[src] % adresses.length, debut = Date.now();
+  let ws, recu = false, garde = null;
+  const perdu = () => {
+    // connexion fermée, en erreur ou muette : on la lâche et on se reconnecte (de plus en plus espacé, 30 s au plus)
+    if (DIRECT.ws !== ws) return;
+    clearInterval(garde);
+    if (!recu) DIRECT.adresse[src] = ia + 1;   // rien reçu par cette adresse : la suivante au prochain essai
+    DIRECT.ws = null; DIRECT.etat = "coupe"; DIRECT.rattraper = true; majDirect();
+    DIRECT.minuterie = setTimeout(() => { if (etat.tf === tf && !document.hidden) ouvrirFlux(); }, Math.min(30000, 2000 * 2 ** DIRECT.essais++));
+    try { ws.close(1000); } catch (x) { /* déjà fermé */ }
+  };
+  try { ws = new WebSocket(`${adresses[ia]}${D.meta.symbole.toLowerCase()}@kline_${INTERVALLE[tf]}`); }
+  catch (e) { DIRECT.adresse[src] = ia + 1; DIRECT.etat = "coupe"; majDirect(); return; }
+  DIRECT.ws = ws; DIRECT.etat = "connexion"; majDirect();
+  ws.onopen = () => {
+    if (DIRECT.ws !== ws) return;
+    if (DIRECT.rattraper) { DIRECT.rattraper = false; rattraper(tf).then(planifierRendu).catch(() => {}); }
+  };
+  ws.onmessage = e => {
+    if (DIRECT.ws !== ws) return;
+    let m;
+    try { m = JSON.parse(e.data); } catch (x) { return; }
+    m = m && m.data ? m.data : m;   // flux « combiné » : { stream, data }
+    if (!m || !m.k) return;
+    if (!recu) { recu = true; DIRECT.etat = "ok"; DIRECT.essais = 0; }
+    recevoir(tf, m);
+  };
+  ws.onerror = perdu;
+  ws.onclose = perdu;
+  // Binance pousse la bougie en cours plusieurs fois par seconde : 15 s sans rien à l'ouverture, ou 60 s ensuite = connexion morte
+  garde = setInterval(() => { if (DIRECT.ws !== ws) clearInterval(garde); else if (Date.now() - (recu ? DIRECT.dernier : debut) > (recu ? 60000 : 15000)) perdu(); }, 5000);
+}
+function fermerFlux() {
+  clearTimeout(DIRECT.minuterie);
+  const ws = DIRECT.ws;
+  DIRECT.ws = null;
+  if (ws) { ws.onclose = null; ws.onerror = null; ws.onmessage = null; try { ws.close(1000); } catch (e) { /* déjà fermé */ } }
+}
+async function reprendre() {
+  // retour sur la page (téléphone sorti de veille, onglet réaffiché) : bougies manquées puis flux
+  const tf = etat.tf, d = cacheTF[tf];
+  if (!d || !d.direct) return;
+  fermerFlux(); DIRECT.etat = "connexion"; majDirect();
+  try { await rattraper(tf); } catch (e) { /* le flux prendra le relais */ }
+  if (etat.tf !== tf) return;
+  planifierRendu();
+  ouvrirFlux();
+}
+let renduPrevu = false, dernierRendu = 0;
+function planifierRendu() {
+  // au plus un rendu par seconde, et seulement quand la page est affichée
+  if (renduPrevu) return;
+  renduPrevu = true;
+  setTimeout(() => requestAnimationFrame(rendreDirect), Math.max(0, 1000 - (Date.now() - dernierRendu)));
+}
+function rendreDirect() {
+  renduPrevu = false; dernierRendu = Date.now();
+  majDirect();
+  const d = cacheTF[etat.tf];
+  if (!d || !d.direct || !temps.length) return;
+  if (d.lignes !== rows) { afficherTF(false); return; }
+  const s = d.sale;
+  d.sale = Infinity;
+  if (s === Infinity) return;
+  if (s < temps.length - 1) { afficherTF(false); return; }   // une bougie ancienne a changé : tout est redessiné
+  const n = rows.length, nouvelles = n > temps.length, ne = D.config.general.emas.length, cl = tok("--long"), cs = tok("--short");
+  for (let i = s; i < n; i++) {
+    if (i >= temps.length) { let t = P(rows[i][0]); if (t <= temps[temps.length - 1]) t = temps[temps.length - 1] + 1; temps.push(t); }
+    const r = rows[i], t = temps[i];
+    serie.update({ time: t, open: r[1], high: r[2], low: r[3], close: r[4] });
+    if (etat.calques.volume) vol.update({ time: t, value: r[5], color: (r[4] >= r[1] ? cl : cs) + "55" });
+    if (etat.calques.ema) emaSeries.forEach((se, k) => se.update({ time: t, value: r[6 + k] }));
+    rsiSerie.update({ time: t, value: r[6 + ne] });
+  }
+  if (nouvelles) fvgs = calculerFVG(); else comblerFVG();
+  majLignePrix();
+  dessiner();
+}
+function majDirect() {
+  const el = document.getElementById("direct");
+  if (!directPossible()) { el.hidden = true; return; }
+  el.hidden = false;
+  const d = cacheTF[etat.tf];
+  let cls = "coupe", txt = "Connexion au direct…";
+  if (d && !d.direct) { cls = "ko"; txt = "Direct indisponible"; }
+  else if (d && DIRECT.etat === "ok") { cls = "ok vivant"; txt = `Direct · ${BN[d.source].nom} · <b>${prix(DIRECT.prix ?? d.lignes[d.lignes.length - 1][4])}</b>`; }
+  else if (d && Date.now() - DIRECT.releve < 30000) { cls = "ok"; txt = `Direct · ${BN[d.source].nom} · relevé toutes les 10 s · <b>${prix(d.lignes[d.lignes.length - 1][4])}</b>`; }
+  else if (d && DIRECT.etat === "coupe") txt = "Direct coupé · reconnexion…";
+  el.className = "pastille " + cls;
+  el.innerHTML = `<i></i>${txt}`;
+  el.title = d && !d.direct ? `${DIRECT.erreur} : le graphique montre les bougies de la dernière vérification.` : "Bougies lues en temps réel chez Binance par ton navigateur ; la détection, elle, tourne une fois par heure.";
+  if (d && d.direct && d.lignes.length && cls.startsWith("ok")) document.title = `${nf.format(d.lignes[d.lignes.length - 1][4])} · Détecteur BTC`;
+}
+async function chargerStatique(tf) {
+  const r = await fetch(`donnees/bougies_${tf}.json${directPossible() ? "?v=" + D.meta.genere : ""}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`bougies ${tfn(tf)} : ${r.status}`);
-  cacheTF[tf] = await r.json();
-  return cacheTF[tf];
+  return r.json();
+}
+async function chargerTF(tf) {
+  // en ligne : bougies du détecteur + bougies Binance en direct ; si Binance ne répond pas, bougies du détecteur seules
+  const c = cacheTF[tf];
+  if (c && c.direct) { try { await rattraper(tf); } catch (e) { /* le flux prendra le relais */ } return cacheTF[tf]; }
+  if (c && !directPossible()) return c;
+  let stat = c || null, err = null;
+  if (!stat) { try { stat = await chargerStatique(tf); } catch (e) { err = e; } }
+  if (directPossible()) {
+    try { cacheTF[tf] = await construireDirect(tf, stat); DIRECT.erreur = ""; return cacheTF[tf]; }
+    catch (e) { DIRECT.erreur = e.message; }
+  }
+  if (!stat) throw new Error([DIRECT.erreur, err && err.message].filter(Boolean).join(" · ") || "aucune donnée");
+  cacheTF[tf] = stat;
+  return stat;
 }
 async function choisirTF(tf, recentrer = true) {
   etat.tf = tf;
   boutonsTF();
   const voile = document.getElementById("voile");
-  if (D.meta.tf_absents.includes(tf)) {
+  if (tfAbsent(tf)) {
     voile.innerHTML = `<div><b>Pas de bougies ${tfn(tf)} dans la maquette</b>${esc(D.meta.message_absents)}</div>`;
     voile.hidden = false;
     return;
   }
   voile.hidden = true;
-  try { await chargerBougies(tf); } catch (e) { voile.innerHTML = `<div><b>Bougies ${tfn(tf)} indisponibles</b>${esc(e.message)}</div>`; voile.hidden = false; return; }
+  fermerFlux();
+  if (directPossible()) { DIRECT.etat = "connexion"; majDirect(); }
+  try { await chargerTF(tf); }
+  catch (e) {
+    if (etat.tf === tf) { voile.innerHTML = `<div><b>Bougies ${tfn(tf)} indisponibles</b>${esc(e.message)}</div>`; voile.hidden = false; majDirect(); }
+    return;
+  }
   if (etat.tf !== tf) return;
   afficherTF(recentrer);
   if (etat.a) fiche();
+  if (cacheTF[tf].direct) ouvrirFlux(); else majDirect();
 }
 function afficherTF(recentrer) {
   const d = cacheTF[etat.tf];
-  if (!d || D.meta.tf_absents.includes(etat.tf)) return;
+  if (!d || tfAbsent(etat.tf)) return;
+  d.sale = Infinity;
+  serie.applyOptions({ lastValueVisible: !d.direct });   // en direct : étiquette du prix en cours (ligne ci-dessous), même hors écran
   rows = d.lignes;
   temps = rows.map(r => P(r[0]));
   // passage à l'heure d'hiver : deux heures UTC tombent sur la même heure de Paris ; l'axe doit rester strictement croissant
@@ -587,8 +863,18 @@ function afficherTF(recentrer) {
   rsiSerie.setData(rows.map((r, i) => ({ time: temps[i], value: r[6 + ne] })));
   document.getElementById("rsi").hidden = !etat.calques.rsi;
   fvgs = calculerFVG();
+  majLignePrix();
   dessiner();
   if (recentrer) centrer();
+}
+let lignePrix = null;
+function majLignePrix() {
+  // prix en cours sur l'axe, comme sur TradingView (l'étiquette par défaut montre la dernière bougie visible)
+  const d = cacheTF[etat.tf];
+  if (!d || !d.direct || !rows.length) { if (lignePrix) { serie.removePriceLine(lignePrix); lignePrix = null; } return; }
+  const r = rows[rows.length - 1];
+  const o = { price: r[4], color: r[4] >= r[1] ? tok("--long") : tok("--short"), lineWidth: 1, lineStyle: LWC.LineStyle.Dotted, axisLabelVisible: true, title: "" };
+  if (lignePrix) lignePrix.applyOptions(o); else lignePrix = serie.createPriceLine(o);
 }
 function centrer() {
   if (!etat.a || !temps.length) return;
@@ -610,6 +896,10 @@ const nomFibo = z => z.niveau && z.niveau.length === 2 ? `Golden zone ${fiboText
 function dessiner() {
   const a = etat.a, c = etat.calques, d = [], dr = [];
   if (c.fvg) d.push({ k: "fvg", couche: "fond", liste: fvgs, max: D.config.affichage.fvg_max });
+  // détection en retard sur le graphique en direct : on montre jusqu'où elle a analysé les bougies
+  const finDet = D.meta.donnees_jusqu_a;
+  if (directPossible() && rows.length && Date.now() / 1000 - finDet > 3 * 3600 && finDet <= rows[rows.length - 1][0])
+    d.push({ k: "vline", t: P(finDet), c: tok("--prepa"), label: "Détection arrêtée ici" });
   marqueurs();
   if (!a) { calque.fixer(d); calqueRsi.fixer([]); return; }
   const tA = P(a.bougie), dur = DUREE[etat.tf], long = a.sens === "long";
@@ -737,8 +1027,10 @@ function legende() {
   if (etat.calques.fvg) items.push(`<span><i style="background:${tok("--fvg-h")}"></i>FVG ${tfn(etat.tf)} pas encore comblées (${D.config.affichage.fvg_max} au plus)</span>`);
   if (etat.calques.ema) D.config.general.emas.forEach(k => items.push(`<span><i style="background:${couleurEma(k)};height:2px"></i>EMA ${k}</span>`));
   if (etat.calques.toutes) items.push(`<span>▲▼ setups · ● pré-alertes : clique dessus pour les ouvrir</span>`);
-  const src = (D.meta.sources_bas_tf || {})[etat.tf];
-  items.push(`<span class="num">Heures de Paris · bougies ${tfn(etat.tf)}${src && /spot/i.test(src) ? " (Binance spot : perp injoignable)" : ""}</span>`);
+  const dt = cacheTF[etat.tf], src = (D.meta.sources_bas_tf || {})[etat.tf];
+  const origine = dt && dt.direct ? (dt.source === "perp" ? " · Binance perp en direct" : " · Binance spot en direct (perp injoignable depuis ce navigateur)")
+    : (src && /spot/i.test(src) ? " (Binance spot : perp injoignable)" : "") + (directPossible() ? " · dernière vérification, sans le direct" : "");
+  items.push(`<span class="num">Heures de Paris · bougies ${tfn(etat.tf)}${origine}</span>`);
   el.innerHTML = items.join("");
 }
 function clicGraph(param) {
@@ -839,7 +1131,7 @@ function blocMoi(a) {
 }
 function resultat(a, m, long) {
   // Sur les bougies du timeframe affiché, après l'alerte : TP1 ou invalidation touché en premier (en mèche).
-  if (!rows.length || D.meta.tf_absents.includes(etat.tf)) return "";
+  if (!rows.length || !cacheTF[etat.tf] || cacheTF[etat.tf].lignes !== rows) return "";
   const i0 = indexDe(P(a.bougie)) + 1;
   for (let i = i0; i < rows.length; i++) {
     const t = rows[i][0], h = rows[i][2], l = rows[i][3];
@@ -947,7 +1239,7 @@ function choisir(id, recentrer = true) {
   if (tf !== etat.tf || !rows.length) choisirTF(tf, true); else { dessiner(); if (recentrer) centrer(); }
 }
 function boutonsTF() {
-  document.getElementById("tfs").innerHTML = D.meta.tf_affichage.map(tf => `<button data-tf="${tf}" aria-pressed="${tf === etat.tf}" class="${D.meta.tf_absents.includes(tf) ? "absent" : ""}" title="${D.meta.tf_absents.includes(tf) ? "Pas de données dans la maquette" : ""}">${tfn(tf)}</button>`).join("");
+  document.getElementById("tfs").innerHTML = D.meta.tf_affichage.map(tf => `<button data-tf="${tf}" aria-pressed="${tf === etat.tf}" class="${tfAbsent(tf) ? "absent" : ""}" title="${tfAbsent(tf) ? "Pas de données dans la maquette" : ""}">${tfn(tf)}</button>`).join("");
 }
 function vue(nom) {
   for (const v of ["alertes", "frequence", "parametres"]) {
@@ -963,15 +1255,95 @@ function route() {
   if (h && D.alertes.some(a => a.id === h) && (!etat.a || etat.a.id !== h)) choisir(h);
 }
 
+// ------------------------------------------------------------------ en-tête et nouvelles alertes (en ligne)
+const fmtHeure = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" });
+function entete() {
+  const m = D.meta, pa = document.getElementById("pastille"), fr = document.getElementById("fraicheur");
+  if (m.maquette) { fr.textContent = `Données jusqu'au ${quand(m.donnees_jusqu_a)}`; return; }
+  fr.textContent = "";
+  const pause = /aucune source/i.test(m.source || ""), retard = Date.now() / 1000 - m.donnees_jusqu_a > 3 * 3600;
+  if (!pause && !retard) {
+    pa.className = "pastille ok";
+    pa.innerHTML = `<i></i>Détection à jour · vérifiée à ${fmtHeure.format(new Date(m.derniere_verification * 1000))}`;
+    pa.title = `Bougies analysées jusqu'au ${quand(m.donnees_jusqu_a)} (${m.source}). Nouvelle vérification toutes les heures.`;
+    return;
+  }
+  const sansCle = pause && m.cle_coinalyze === false;
+  pa.className = "pastille alerte";
+  pa.innerHTML = `<i></i>Détection arrêtée au ${quandCourt(m.donnees_jusqu_a)}${sansCle ? " · clé Coinalyze manquante" : pause ? " · source perp injoignable" : ""}`;
+  pa.title = sansCle ? "Binance bloque les serveurs de GitHub : ajoute le secret COINALYZE_API_KEY dans ton dépôt pour que la détection reprenne."
+    : pause ? `Dernière vérification ${quand(m.derniere_verification)} : ni Coinalyze ni Binance perp n'ont répondu. Elle réessaie toutes les heures.`
+    : `Dernière vérification ${quand(m.derniere_verification)} : regarde l'onglet Actions de ton dépôt.`;
+}
+async function verifierVersion() {
+  // toutes les deux minutes : un petit fichier dit si la détection a tourné ; alors seulement on recharge les alertes
+  if (!directPossible()) return;
+  try {
+    const r = await fetch(`donnees/version.json?t=${Date.now()}`, { cache: "no-store" });
+    if (r.ok) { const v = await r.json(); if (v.genere && v.genere !== D.meta.genere) await rechargerAlertes(v.genere); }
+  } catch (e) { /* réseau coupé : nouvel essai au prochain passage */ }
+  entete();
+}
+async function rechargerAlertes(version) {
+  const r = await fetch(`donnees/alertes.json?v=${version}`, { cache: "no-store" });
+  if (!r.ok) return;
+  const n = await r.json(), connues = new Set(D.alertes.map(a => a.id));
+  D.meta = n.meta; D.alertes = n.alertes; D.frequence = n.frequence;
+  if (etat.a) etat.a = D.alertes.find(a => a.id === etat.a.id) || etat.a;
+  for (const tf of Object.keys(cacheTF)) if (tf !== etat.tf && cacheTF[tf] && !cacheTF[tf].direct) delete cacheTF[tf];   // fichiers régénérés
+  entete(); liste(); pageFrequence(); boutonsTF();
+  if (etat.a) fiche();
+  dessiner();
+  const nouvelles = D.alertes.filter(a => !connues.has(a.id));
+  if (nouvelles.length) annoncer(nouvelles);
+}
+function annoncer(nouvelles) {
+  const a = nouvelles.slice().sort((u, v) => (v.niveau === "setup") - (u.niveau === "setup") || v.heure - u.heure)[0], n = nouvelles.length;
+  const el = document.getElementById("annonce");
+  el.style.borderLeftColor = a.niveau === "setup" ? "var(--setup)" : "var(--prepa)";
+  el.innerHTML = `<span>${a.niveau === "setup" ? "🟢 Nouveau setup" : "🟡 Nouvelle pré-alerte"} · ${NOMS_STRAT[a.strategie]} ${a.sens} ${tfn(a.tf)}${n > 1 ? ` (+${n - 1})` : ""}</span>
+    <button class="btn prim" type="button" data-voir="${esc(a.id)}">Voir</button><button class="btn" type="button" data-fermer aria-label="Fermer">×</button>`;
+  el.hidden = false;
+}
+
 function init(d) {
   D = d;
   document.getElementById("symbole").textContent = `${d.meta.symbole} perp`;
-  document.getElementById("fraicheur").textContent = `Données jusqu'au ${quand(d.meta.donnees_jusqu_a)}`;
+  entete();
   if (!d.meta.maquette) {
-    const pa = document.getElementById("pastille");
-    pa.classList.add("direct");
-    pa.innerHTML = `<i></i>En direct · vérifié ${new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(d.meta.derniere_verification * 1000)).replace(",", "")}`;
-    pa.title = `Source : ${d.meta.source}`;
+    document.getElementById("aller-direct").hidden = false;
+    document.getElementById("aller-direct").addEventListener("click", () => {
+      // sans animation : le RSI suit le graphique principal
+      if (!rows.length) return;
+      const r = chart.timeScale().getVisibleLogicalRange(), w = r ? Math.max(40, r.to - r.from) : 120, n = rows.length - 1;
+      chart.timeScale().setVisibleLogicalRange({ from: n + 25 - w, to: n + 25 });
+    });
+    document.getElementById("annonce").addEventListener("click", e => {
+      const v = e.target.closest("[data-voir]");
+      if (v) location.hash = v.dataset.voir;
+      if (v || e.target.closest("[data-fermer]")) document.getElementById("annonce").hidden = true;
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      verifierVersion();
+      const c = cacheTF[etat.tf];
+      if (c && c.direct && (!DIRECT.ws || Date.now() - DIRECT.dernier > 15000)) reprendre();
+      else if (c && !c.direct) choisirTF(etat.tf, false);   // direct indisponible au chargement : nouvel essai
+    });
+    setInterval(async () => {
+      // flux temps réel bloqué (réseau d'entreprise, proxy…) : on relève les dernières bougies toutes les 10 s
+      const tf = etat.tf, c = cacheTF[tf];
+      if (document.hidden || DIRECT.etat === "ok" || !c || !c.direct || DIRECT.releveEnCours) return;
+      DIRECT.releveEnCours = true;
+      try { await rattraper(tf); if (etat.tf === tf) { DIRECT.releve = Date.now(); planifierRendu(); } } catch (e) { /* nouvel essai dans 10 s */ }
+      finally { DIRECT.releveEnCours = false; }
+    }, 10000);
+    setInterval(() => {
+      verifierVersion();
+      const c = cacheTF[etat.tf];
+      if (c && !c.direct && !document.hidden) choisirTF(etat.tf, false);   // Binance ne répondait pas : nouvel essai
+    }, 120000);
+    majDirect();
     document.getElementById("intro-params").textContent = "Tout ce que le détecteur utilise est réglable ici. « Enregistrer » écrit tes réglages dans ton dépôt GitHub ; le détecteur les applique à la vérification suivante (au plus une heure), ou tout de suite avec « Lancer la vérification maintenant ».";
   }
   if (enLigne()) {
