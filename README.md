@@ -6,7 +6,7 @@ Il ne prend aucun trade : il prévient sur Telegram et montre sur le dashboard o
 - **Dashboard** : https://infossienzo-ui.github.io/detecteur-btc/ — graphique en direct : la page lit elle-même les
   bougies Binance perp et suit leur flux temps réel (tous les timeframes, de 1m à D) ; elle recharge les alertes dès
   qu'une vérification en a trouvé de nouvelles.
-- **Vérification** : toutes les heures, 2 minutes après l'heure pleine (GitHub Actions, onglet *Actions*).
+- **Vérification** : toutes les 15 minutes (à 7, 22, 37 et 52), GitHub Actions, onglet *Actions*.
 - **Alertes** : 🟢 setup détecté (un déclencheur clôturé), 🟡 en préparation (contexte bon, rien de clôturé).
 
 ## Mise en route
