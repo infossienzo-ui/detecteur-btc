@@ -379,18 +379,25 @@ function logique(t) {
 const indexDe = t => Math.max(0, Math.min(temps.length - 1, Math.floor(logique(t))));
 
 // ------------------------------------------------------------------ dessins (primitive du graphique)
-let places = [];
-function libre(X, Y, w, h) { return !places.some(r => X < r[0] + r[2] && r[0] < X + w && Y < r[1] + r[3] && r[1] < Y + h); }
-function etiquette(ctx, txt, x, y, c, pos) {
-  const w = ctx.measureText(txt).width + 10, h = 17;
-  let X = pos === "droite" ? x + 6 : pos === "gauche" ? x - w - 6 : pos === "dessus" ? x + 4 : x - w / 2;
-  let Y = pos === "bas" ? y + 7 : pos === "droite" || pos === "gauche" ? y - h / 2 : pos === "dessus" ? y - h - 2 : y - h - 7;
-  const pas = pos === "bas" ? h + 2 : -(h + 2);
-  for (let k = 0; k < 6 && !libre(X, Y, w, h); k++) Y += pas;
-  places.push([X, Y, w, h]);
-  ctx.globalAlpha = 0.95; ctx.fillStyle = tok("--panel"); ctx.strokeStyle = c; ctx.lineWidth = 1;
-  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(X, Y, w, h, 4); else ctx.rect(X, Y, w, h); ctx.fill(); ctx.stroke();
-  ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.textBaseline = "middle"; ctx.fillText(txt, X + 5, Y + h / 2 + .5);
+// Textes : petits, sans cadre, collés au niveau qu'ils décrivent (posés sur la ligne, à son origine) et ancrés au
+// graphique : ils suivent leur niveau et ne se déplacent jamais pour s'éviter. Si deux textes se chevauchent, le moins
+// important n'est pas affiché. Taille réglable dans Paramètres (10 px par défaut).
+const policeTextes = () => (D && D.config.affichage && D.config.affichage.taille_textes) || 10;
+function poserTextes(ctx, textes, W, Hc) {
+  const poses = [], fond = tok("--panel"), fam = tok("--f-texte"), taille = policeTextes(), h = taille + 2;
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  textes.map((e, i) => [e, i]).sort((u, v) => (v[0].prio || 0) - (u[0].prio || 0) || u[1] - v[1]).forEach(([e]) => {
+    ctx.font = `${e.gras ? 700 : 500} ${taille}px ${fam}`;
+    const w = ctx.measureText(e.txt).width;
+    const X = e.align === "right" ? e.x - w : e.align === "center" ? e.x - w / 2 : e.x;
+    const Y = e.base === "top" ? e.y : e.base === "middle" ? e.y - h / 2 : e.y - h;
+    if (X > W || X + w < 0 || Y > Hc || Y + h < 0) return;
+    if (poses.some(r => X < r[0] + r[2] + 2 && r[0] < X + w + 2 && Y < r[1] + r[3] && r[1] < Y + h)) return;
+    poses.push([X, Y, w, h]);
+    // liseré de la couleur du fond : le texte reste lisible sur les bougies sans les masquer derrière un cadre
+    ctx.globalAlpha = 0.8; ctx.lineWidth = 2.5; ctx.strokeStyle = fond; ctx.strokeText(e.txt, X, Y + h / 2);
+    ctx.globalAlpha = 1; ctx.fillStyle = e.c; ctx.fillText(e.txt, X, Y + h / 2);
+  });
 }
 class Calque {
   constructor() { this.d = []; this.vues = [{ zOrder: () => "bottom", renderer: () => ({ draw: c => this.dessiner(c, "fond") }) },
@@ -409,46 +416,85 @@ class Calque {
       const ecart = (x0 != null && x1 != null) ? Math.max(1, x1 - x0) : 6;
       // indice fractionnaire (entre deux bougies, ou après la dernière) : le graphique ne place que des indices entiers
       const x = l => { const i = Math.floor(l), xi = xr(i); return xi == null ? null : xi + (l - i) * ecart; };
-      const W = mediaSize.width;
+      const W = mediaSize.width, Hc = mediaSize.height;
       // une zone part de son origine (à gauche) et va vers la droite : jusqu'à la bougie qui la comble, sinon jusqu'au bord
       const xD = t => t == null ? W : x(logique(t));
+      // les textes de toutes les couches sont posés en dernier, au-dessus des bougies
+      const dessus = couche === "dessus", textes = [];
+      const texte = (o, X, Y, align, base, prio) => {
+        if (o.label && X != null && Y != null) textes.push({ txt: o.label, x: X, y: Y, align, base, c: o.cl || o.c, prio: o.prio ?? prio, gras: o.gras });
+      };
+      // point d'ancrage du texte d'un niveau : son origine, ou le repère fixe donné par le dessin (tTexte)
+      const xTexte = (o, xDefaut) => o.tTexte != null ? x(logique(o.tTexte)) : xDefaut;
       ctx.save();
-      if (couche === "fond") places = [];
-      ctx.font = "500 11px " + tok("--f-texte");
+      ctx.font = `500 ${policeTextes()}px ${tok("--f-texte")}`;
       for (const o of this.d) {
-        if ((o.couche || "dessus") !== couche) continue;
+        const ici = (o.couche || "dessus") === couche;
+        if (!ici && !(dessus && o.label)) continue;
         if (o.k === "rect") {
           const xa = x(logique(o.t1)), xb = xD(o.t2), ya = y(o.p1), yb = y(o.p2);
           if (xa == null || xb == null || ya == null || yb == null) continue;
           const L = xa - ecart / 2, R = o.t2 == null ? W : xb + ecart / 2, T = Math.min(ya, yb), H = Math.max(1, Math.abs(yb - ya));
-          if (R < 0 || L > W) continue;
-          ctx.globalAlpha = o.alpha ?? 0.16; ctx.fillStyle = o.c; ctx.fillRect(L, T, R - L, H);
-          if (o.bord !== false) { ctx.globalAlpha = 0.9; ctx.strokeStyle = o.c; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.strokeRect(L + .5, T + .5, R - L - 1, H - 1); }
-          if (o.label) {
-            ctx.globalAlpha = 1; const w = ctx.measureText(o.label).width + 6; let Y = T + 2; const X = Math.max(L + 2, 2);
-            for (let k = 0; k < 6 && !libre(X, Y, w, 14); k++) Y += 15;
-            places.push([X, Y, w, 14]); ctx.fillStyle = o.cl || o.c; ctx.textBaseline = "top"; ctx.fillText(o.label, X + 2, Y + 1);
+          if (ici && R >= 0 && L <= W) {
+            ctx.globalAlpha = o.alpha ?? 0.16; ctx.fillStyle = o.c; ctx.fillRect(L, T, R - L, H);
+            if (o.bord !== false) { ctx.globalAlpha = 0.9; ctx.strokeStyle = o.c; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.strokeRect(L + .5, T + .5, R - L - 1, H - 1); }
+            ctx.globalAlpha = 1;
           }
-          ctx.globalAlpha = 1;
+          // texte collé au bord haut de la zone (au bord bas pour un bas de range), à son origine
+          const xt = dessus && o.label ? xTexte(o, xa) : null;
+          if (xt != null) texte(o, xt - ecart / 2 + 3, o.dessous ? T + H + 1 : T - 1, "left", o.dessous ? "top" : "bottom", 2);
         } else if (o.k === "seg") {
           const xa = x(logique(o.t1)), xb = xD(o.t2), ya = y(o.p1), yb = y(o.p2);
           if (xa == null || xb == null || ya == null || yb == null) continue;
-          ctx.strokeStyle = o.c; ctx.lineWidth = o.w || 1.5; ctx.setLineDash(o.dash || []);
-          ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke(); ctx.setLineDash([]);
-          if (o.label) etiquette(ctx, o.label, o.fin ? xb : Math.max(xa, 2), o.fin ? yb : ya, o.c, o.pos || "haut");
+          if (ici) {
+            ctx.strokeStyle = o.c; ctx.lineWidth = o.w || 1.5; ctx.setLineDash(o.dash || []);
+            ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke(); ctx.setLineDash([]);
+          }
+          if (dessus && o.label) {
+            const bas = o.pos === "bas";
+            if (o.ancre === "milieu") texte(o, (xa + xb) / 2, (ya + yb) / 2 + (bas ? 2 : -1), "center", bas ? "top" : "bottom", 3);
+            else if (o.ancre === "fin" && o.alignTexte === "right") texte(o, xb - 2, yb + (bas ? 2 : -1), "right", bas ? "top" : "bottom", 3);   // cassure : à la bougie qui casse
+            else if (o.ancre === "fin") texte(o, xb, yb + (bas ? 5 : -4), "center", bas ? "top" : "bottom", 3);
+            else {
+              // niveau : posé sur sa ligne juste après son origine ; ou juste avant, centré sur sa hauteur, pour alterner
+              // des niveaux serrés
+              const xt = xTexte(o, xa);
+              if (xt != null && o.cote === "gauche") texte(o, xt - 6, ya, "right", "middle", 3);
+              else if (xt != null) texte(o, xt + 6, ya + (bas ? 2 : -1), "left", bas ? "top" : "bottom", 3);
+            }
+          }
         } else if (o.k === "point") {
           const xa = x(logique(o.t)), ya = y(o.p);
           if (xa == null || ya == null) continue;
-          ctx.fillStyle = o.c; ctx.beginPath(); ctx.arc(xa, ya, o.r || 4, 0, 2 * Math.PI); ctx.fill();
-          ctx.strokeStyle = tok("--panel"); ctx.lineWidth = 1.5; ctx.stroke();
-          if (o.label) etiquette(ctx, o.label, xa, ya, o.c, o.pos || "haut");
+          if (ici) {
+            ctx.fillStyle = o.c; ctx.beginPath(); ctx.arc(xa, ya, o.r || 4, 0, 2 * Math.PI); ctx.fill();
+            ctx.strokeStyle = tok("--panel"); ctx.lineWidth = 1.5; ctx.stroke();
+          }
+          if (dessus && o.label) {
+            const r = (o.r || 4) + 3;
+            if (o.pos === "gauche") texte(o, xa - r, ya, "right", "middle", 3);
+            else if (o.pos === "droite") texte(o, xa + r, ya, "left", "middle", 3);
+            else if (o.pos === "bas") texte(o, xa, ya + r, "center", "top", 3);
+            else texte(o, xa, ya - r, "center", "bottom", 3);
+          }
+        } else if (o.k === "marque") {
+          // texte du repère de l'alerte ouverte, au-delà de la flèche du graphique (même calcul de taille que la bibliothèque)
+          if (!dessus) continue;
+          const xt = x(logique(o.t)), yb = y(o.p);
+          if (xt == null || yb == null) continue;
+          const bs = Math.min(Math.max(ecart, 12), 30), base = Math.round(bs) + (Math.round(bs) % 2), marge = Math.max(Math.round(bs * 0.1), 3);
+          const decalage = marge + o.empiles.reduce((t, k) => t + base * k + marge, 0), demi = base;   // flèche de taille 2 : demi-hauteur = base
+          if (o.dessous) texte(o, xt, yb + decalage + 2 * demi + 2, "center", "top", 4.5);
+          else texte(o, xt, yb - decalage - 2 * demi - 2, "center", "bottom", 4.5);
+        } else if (o.k === "texte") {
+          if (dessus) { const xt = x(logique(o.t)), yt = y(o.p); if (xt != null && yt != null) texte(o, o.cote === "gauche" ? xt - 6 : xt + 6, o.cote === "gauche" ? yt : yt - 1, o.cote === "gauche" ? "right" : "left", o.cote === "gauche" ? "middle" : "bottom", 3); }
         } else if (o.k === "vline") {
           // trait vertical sur toute la hauteur (fin des bougies analysées par la détection)
           const xa = x(logique(o.t) - 0.5);
           if (xa == null || xa < 0 || xa > W) continue;
           ctx.strokeStyle = o.c; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
-          ctx.beginPath(); ctx.moveTo(xa + .5, 0); ctx.lineTo(xa + .5, mediaSize.height); ctx.stroke(); ctx.setLineDash([]);
-          if (o.label) etiquette(ctx, o.label, xa, 20, o.c, "gauche");
+          ctx.beginPath(); ctx.moveTo(xa + .5, 0); ctx.lineTo(xa + .5, Hc); ctx.stroke(); ctx.setLineDash([]);
+          texte(o, xa - 4, 4, "right", "top", 1);
         } else if (o.k === "fvg") {
           // comme ton indicateur : boîte sur la bougie du milieu et la suivante ; une FVG comblée par une mèche disparaît
           let n = 0;
@@ -464,7 +510,8 @@ class Calque {
         } else if (o.k === "profil") {
           const xa = o.l != null ? x(o.l) : null;
           if (xa == null) continue;
-          const largeur = Math.min(20 * ecart, mediaSize.width * 0.3), max = Math.max(...o.vol);
+          const largeur = Math.min(20 * ecart, W * 0.3), max = Math.max(...o.vol);
+          ctx.textAlign = "left";
           o.vol.forEach((v, i) => {
             const ya = y(o.bords[i]), yb = y(o.bords[i + 1]);
             if (ya == null || yb == null) return;
@@ -473,13 +520,14 @@ class Calque {
             if (i === o.poc) { c = tok("--z-poc"); al = 0.85; } else if (i === o.vah) { c = tok("--z-vah"); al = 0.8; } else if (i === o.val) { c = tok("--z-val"); al = 0.8; }
             ctx.globalAlpha = al; ctx.fillStyle = c; ctx.fillRect(xa, T, w, H); ctx.globalAlpha = 1;
             const nom = i === o.poc ? "POC" : i === o.vah ? "VAH" : i === o.val ? "VAL" : "";
-            if (nom && H >= 9) { ctx.fillStyle = tok("--ink"); ctx.textBaseline = "middle"; ctx.fillText(nom, xa + 4, T + H / 2); }
+            if (nom && H >= policeTextes() - 1) { ctx.fillStyle = tok("--ink"); ctx.textBaseline = "middle"; ctx.fillText(nom, xa + 4, T + H / 2); }
           });
           ctx.fillStyle = tok("--muted"); ctx.textBaseline = "bottom";
           const yh = y(o.bords[o.bords.length - 1]);
           if (yh != null) ctx.fillText(o.titre, xa, yh - 3);
         }
       }
+      if (dessus) poserTextes(ctx, textes, W, Hc);
       ctx.restore();
     });
   }
@@ -742,7 +790,7 @@ function ouvrirFlux() {
     try { m = JSON.parse(e.data); } catch (x) { return; }
     m = m && m.data ? m.data : m;   // flux « combiné » : { stream, data }
     if (!m || !m.k) return;
-    if (!recu) { recu = true; DIRECT.etat = "ok"; DIRECT.essais = 0; }
+    if (!recu) { recu = true; DIRECT.etat = "ok"; DIRECT.essais = 0; DIRECT.releve = 0; }
     recevoir(tf, m);
   };
   ws.onerror = perdu;
@@ -873,7 +921,11 @@ function afficherTF(recentrer) {
   fvgs = calculerFVG();
   majLignePrix();
   dessiner();
-  if (recentrer) centrer();
+  if (recentrer) {
+    // le graphique applique les nouvelles bougies à l'image suivante et peut alors déplacer la vue : on recentre après
+    centrer();
+    requestAnimationFrame(() => requestAnimationFrame(centrer));
+  }
 }
 let lignePrix = null;
 function majLignePrix() {
@@ -885,11 +937,14 @@ function majLignePrix() {
   if (lignePrix) lignePrix.applyOptions(o); else lignePrix = serie.createPriceLine(o);
 }
 function centrer() {
-  if (!etat.a || !temps.length) return;
+  // seulement sur les bougies du timeframe affiché (pendant un changement de timeframe, les anciennes sont encore là)
+  if (!etat.a || !temps.length || !cacheTF[etat.tf] || cacheTF[etat.tf].lignes !== rows) return;
   const i = indexDe(P(etat.a.bougie));
-  const avant = { H1: 70, H2: 50, H3: 50, H4: 50, H5: 50, H6: 50, H8: 45, H12: 45, D: 55 }[etat.tf] || 60, apres = 35;
-  chart.timeScale().setVisibleLogicalRange({ from: i - avant, to: i + apres });
+  chart.timeScale().setVisibleLogicalRange({ from: i - avantAlerte(), to: i + 35 });
 }
+
+// bougies affichées avant l'alerte quand le graphique se centre dessus
+const avantAlerte = () => ({ H1: 70, H2: 50, H3: 50, H4: 50, H5: 50, H6: 50, H8: 45, H12: 45, D: 55 }[etat.tf] || 60);
 
 // ------------------------------------------------------------------ zones
 function couleurZone(type) {
@@ -911,77 +966,106 @@ function dessiner() {
   marqueurs();
   if (!a) { calque.fixer(d); calqueRsi.fixer([]); return; }
   const tA = P(a.bougie), dur = DUREE[etat.tf], long = a.sens === "long";
+  // Textes des niveaux : à l'origine du niveau ; s'il commence avant le cadrage par défaut de l'alerte, à un repère fixe
+  // près du bord gauche de ce cadrage. Le repère est une date : le texte suit le graphique et ne glisse jamais.
+  const tRepere = tA - Math.round(avantAlerte() * 0.85) * dur, ancre = t => Math.max(t, tRepere);
+  // Fibo : textes des deux côtés du point d'ancrage ; dans le cadrage par défaut, il reste à gauche la place d'un texte
+  // (une centaine de pixels), même sur téléphone
+  const pxBarre = Math.max(1, chart.timeScale().width()) / (avantAlerte() + 35);
+  const tRepereFibo = tA - Math.max(5, avantAlerte() - Math.max(Math.ceil(100 / pxBarre), Math.round(avantAlerte() * 0.4))) * dur;
+  const prixNiv = (nom, p) => `${nom} · ${prix(p)}`;
   if (c.zones) for (const z of a.zones) {
-    const col = couleurZone(z.type), nomz = `${z.type} ${tfn(z.tf)}`;
+    const col = couleurZone(z.type), nomz = `${z.type} ${tfn(z.tf)}`, milieu = (z.lo + z.hi) / 2;
     if (z.type === "Fibo") continue;   // dessiné avec ses niveaux
     if (z.range) {
-      d.push({ k: "rect", couche: "fond", t1: P(z.range.debut), t2: null, p1: z.range.haut[0], p2: z.range.haut[1], c: col, label: `Haut du range ${tfn(z.tf)}` });
-      d.push({ k: "rect", couche: "fond", t1: P(z.range.debut), t2: null, p1: z.range.bas[0], p2: z.range.bas[1], c: col, label: `Bas du range ${tfn(z.tf)}` });
+      const t0 = P(z.range.debut);
+      d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: z.range.haut[0], p2: z.range.haut[1], c: col, label: `Haut du range ${tfn(z.tf)}`, tTexte: ancre(t0) });
+      d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: z.range.bas[0], p2: z.range.bas[1], c: col, label: `Bas du range ${tfn(z.tf)}`, tTexte: ancre(t0), dessous: true });
     } else if (z.lo === z.hi) {
-      d.push({ k: "seg", t1: z.debut ? P(z.debut) : tA, t2: null, p1: z.lo, p2: z.hi, c: col, w: 2, label: `${z.type} ${prix(z.lo)}`, pos: "dessus" });
+      const t0 = z.debut ? P(z.debut) : tA;
+      d.push({ k: "seg", t1: t0, t2: null, p1: z.lo, p2: z.hi, c: col, w: 2, label: prixNiv(z.type, z.lo), tTexte: ancre(t0) });
     } else if (z.type === "FVG") {
       // sur les bougies qui la forment (comme ton indicateur), puis prolongée en léger vers la droite jusqu'à son comblement
       const tFin = P(z.debut + 2 * DUREE[z.tf]) - dur;
-      d.push({ k: "rect", couche: "fond", t1: P(z.debut), t2: tFin, p1: z.lo, p2: z.hi, c: col, label: nomz, alpha: 0.3 });
+      d.push({ k: "rect", couche: "fond", t1: P(z.debut), t2: tFin, p1: z.lo, p2: z.hi, c: col, label: nomz, alpha: 0.3, tTexte: ancre(P(z.debut)) });
       d.push({ k: "rect", couche: "fond", t1: tFin + dur, t2: z.fin ? P(z.fin) : null, p1: z.lo, p2: z.hi, c: col, alpha: 0.08, bord: false });
     } else if (z.type === "OB") {
       // depuis la bougie de l'OB, vers la droite, jusqu'à la clôture qui le casse
-      d.push({ k: "rect", couche: "fond", t1: P(z.debut), t2: z.fin ? P(z.fin) : null, p1: z.lo, p2: z.hi, c: col, label: nomz });
+      d.push({ k: "rect", couche: "fond", t1: P(z.debut), t2: z.fin ? P(z.fin) : null, p1: z.lo, p2: z.hi, c: col, label: nomz, tTexte: ancre(P(z.debut)) });
     } else if (z.type === "EMA50") {
-      d.push({ k: "rect", couche: "fond", t1: tA, t2: tA + 12 * Math.max(dur, DUREE[a.tf]), p1: z.lo, p2: z.hi, c: col, label: `EMA 50 ${tfn(z.tf)}` });
+      d.push({ k: "rect", couche: "fond", t1: tA, t2: tA + 12 * Math.max(dur, DUREE[a.tf]), p1: z.lo, p2: z.hi, c: col, label: prixNiv(`EMA 50 ${tfn(z.tf)}`, milieu) });
     } else {
       // POC / VAH / VAL : niveaux du profil au moment de l'alerte, à partir de l'alerte vers la droite
-      d.push({ k: "rect", couche: "fond", t1: tA, t2: null, p1: z.lo, p2: z.hi, c: col, label: `${nomz} (à l'alerte)` });
+      d.push({ k: "rect", couche: "fond", t1: tA, t2: null, p1: z.lo, p2: z.hi, c: col, label: prixNiv(nomz, milieu) });
     }
   }
   if (c.fibo) {
-    const vus = new Set(), cfg = D.config.strat1, col = tok("--z-fibo"), [g0, g1] = cfg.fibo_golden;
+    const cfg = D.config.strat1, col = tok("--z-fibo"), [g0, g1] = cfg.fibo_golden, jambes = new Map();
+    // une jambe d'impulsion par timeframe de contexte ; ses niveaux qui contiennent la clôture du déclencheur sont en gras
     for (const z of a.zones) if (z.fibo) {
-      const f = z.fibo, H = f.fin.p, L = f.debut.p, t0 = P(f.debut.t), cle = f.debut.t + "-" + f.fin.t;
-      if (!vus.has(cle)) {
-        vus.add(cle);
-        d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: H - g0 * (H - L), p2: H - g1 * (H - L), c: col, alpha: 0.14, bord: false });
-        d.push({ k: "seg", t1: t0, t2: P(f.fin.t), p1: L, p2: H, c: col, w: 1.5, dash: [6, 4] });
-        d.push({ k: "point", t: t0, p: L, c: col, r: 5, label: `Départ Fibo ${prix(L)}`, pos: H > L ? "bas" : "haut" });
-        d.push({ k: "point", t: P(f.fin.t), p: H, c: col, r: 5, label: `Arrivée Fibo ${prix(H)}`, pos: H > L ? "haut" : "bas" });
-        for (const r of cfg.fibo_niveaux) {
-          const p = H - r * (H - L), gold = r >= g0 && r <= g1;
-          d.push({ k: "seg", t1: t0, t2: null, p1: p, p2: p, c: col, w: 1, dash: gold ? [] : [3, 3], label: `${fiboTexte(r)} · ${prix(p)}`, pos: "dessus" });
-        }
-      }
-      // le niveau (ou la golden zone) qui contient la clôture du déclencheur
-      d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: z.lo, p2: z.hi, c: col, alpha: 0.3, label: `${nomFibo(z)} ${tfn(z.tf)}` });
+      const cle = z.fibo.debut.t + "-" + z.fibo.fin.t;
+      if (!jambes.has(cle)) jambes.set(cle, { f: z.fibo, tf: z.tf, alerte: new Set(), zones: [] });
+      const j = jambes.get(cle);
+      for (const r of z.niveau || []) j.alerte.add(r);
+      j.zones.push(z);
+    }
+    for (const { f, tf, alerte, zones } of jambes.values()) {
+      const H = f.fin.p, L = f.debut.p, t0 = P(f.debut.t), tTexte = Math.max(t0, tRepereFibo);
+      d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: H - g0 * (H - L), p2: H - g1 * (H - L), c: col, alpha: 0.14, bord: false });
+      for (const z of zones) d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: z.lo, p2: z.hi, c: col, alpha: 0.3 });   // zone de l'alerte
+      d.push({ k: "seg", t1: t0, t2: P(f.fin.t), p1: L, p2: H, c: col, w: 1.5, dash: [6, 4] });
+      d.push({ k: "point", t: t0, p: L, c: col, r: 4, label: `Fibo ${tfn(tf)}`, pos: "gauche" });
+      if (tTexte !== t0) d.push({ k: "texte", t: tTexte, p: L, c: col, label: `Fibo ${tfn(tf)}`, cote: "gauche" });   // départ hors du cadrage
+      d.push({ k: "point", t: P(f.fin.t), p: H, c: col, r: 4, label: prixNiv("0", H), pos: H > L ? "haut" : "bas" });
+      // Textes posés sur leur ligne, un niveau sur deux de chaque côté du point d'ancrage : deux niveaux voisins
+      // (0,618 / 0,65 / 0,705 sont très proches) ne se recouvrent pas, sans jamais déplacer un texte. Le 1 est à droite.
+      const niv = cfg.fibo_niveaux.slice().sort((u, v) => u - v);
+      niv.forEach((r, k) => {
+        const p = H - r * (H - L), gold = r >= g0 && r <= g1;
+        d.push({ k: "seg", t1: t0, t2: null, p1: p, p2: p, c: col, w: 1, dash: gold ? [] : [3, 3], label: prixNiv(fiboTexte(r), p), tTexte,
+                 cote: (niv.length - 1 - k) % 2 ? "gauche" : "droite", gras: alerte.has(r), prio: alerte.has(r) ? 4.5 : gold ? 3.5 : 3 });
+      });
     }
   }
   if (c.structure && a.cassure) {
     const k = a.cassure;
-    d.push({ k: "seg", t1: P(k.piv_t), t2: P(k.t), p1: k.niv, p2: k.niv, c: tok("--ink"), w: 1.5, label: `${k.type} ${tfn(k.tf)}`, fin: true, pos: long ? "haut" : "bas" });
+    d.push({ k: "seg", t1: P(k.piv_t), t2: P(k.t), p1: k.niv, p2: k.niv, c: tok("--ink"), w: 1.5, label: `${k.type} ${tfn(k.tf)}`, ancre: "fin", alignTexte: "right", pos: long ? "haut" : "bas", prio: 4 });
   }
   if (c.structure && a.sweep) {
     const s = a.sweep;
-    d.push({ k: "seg", t1: P(s.piv_t), t2: P(s.t), p1: s.niv, p2: s.niv, c: tok("--ink"), w: 1.5, dash: [4, 3], label: "Swing balayé", pos: long ? "haut" : "bas" });
-    d.push({ k: "point", t: P(s.t), p: s.meche, c: tok("--prepa"), r: 5, label: "Sweep", pos: long ? "bas" : "haut" });
+    d.push({ k: "seg", t1: P(s.piv_t), t2: P(s.t), p1: s.niv, p2: s.niv, c: tok("--ink"), w: 1.5, dash: [4, 3], label: "Swing balayé", ancre: "fin", alignTexte: "right", pos: long ? "haut" : "bas" });
+    d.push({ k: "point", t: P(s.t), p: s.meche, c: tok("--prepa"), r: 5, label: "Sweep", pos: long ? "bas" : "haut", prio: 4 });
   }
   if (c.declencheurs) for (const x of a.declencheurs) {
     const col = a.niveau === "setup" ? (long ? tok("--long") : tok("--short")) : tok("--prepa");
-    if (x.liquidite) d.push({ k: "seg", t1: P(x.liquidite.piv_t), t2: tA, p1: x.liquidite.niv, p2: x.liquidite.niv, c: col, w: 1, dash: [2, 3], label: "Liquidité prise", pos: long ? "bas" : "haut" });
+    if (x.liquidite) d.push({ k: "seg", t1: P(x.liquidite.piv_t), t2: tA, p1: x.liquidite.niv, p2: x.liquidite.niv, c: col, w: 1, dash: [2, 3], label: "Liquidité prise", ancre: "milieu", pos: long ? "bas" : "haut" });
     if (x.p1 && x.p2) {
       const nm = x.nom.includes("cachée") ? "Div. cachée" : "Divergence";
-      d.push({ k: "seg", t1: P(x.p1.t), t2: P(x.p2.t), p1: x.p1.p, p2: x.p2.p, c: col, w: 2, label: nm, fin: true, pos: long ? "bas" : "haut" });
+      d.push({ k: "seg", t1: P(x.p1.t), t2: P(x.p2.t), p1: x.p1.p, p2: x.p2.p, c: col, w: 2, label: nm, ancre: "fin", pos: long ? "bas" : "haut", prio: 4 });
       dr.push({ k: "seg", t1: P(x.p1.t), t2: P(x.p2.t), p1: x.p1.rsi, p2: x.p2.rsi, c: col, w: 2 });
     }
     if (x.a && x.cassure) {
-      d.push({ k: "seg", t1: P(x.a.t), t2: P(x.cassure.t), p1: x.a.p, p2: x.cassure.p, c: col, w: 1.5, label: x.nom.includes("wedge") ? "Wedge" : "Drapeau", pos: long ? "haut" : "bas" });
+      d.push({ k: "seg", t1: P(x.a.t), t2: P(x.cassure.t), p1: x.a.p, p2: x.cassure.p, c: col, w: 1.5, label: x.nom.includes("wedge") ? "Wedge" : "Drapeau", ancre: "milieu", pos: long ? "haut" : "bas" });
       if (x.b) d.push({ k: "point", t: P(x.b.t), p: x.b.p, c: col, r: 3 });
-      d.push({ k: "point", t: P(x.cassure.t), p: x.cassure.p, c: col, r: 4, label: "Cassure", pos: long ? "haut" : "bas" });
-      if (x.retest_t) d.push({ k: "point", t: P(x.retest_t), p: x.cassure.p, c: col, r: 4, label: "Retest", pos: long ? "bas" : "haut" });
+      d.push({ k: "point", t: P(x.cassure.t), p: x.cassure.p, c: col, r: 4, label: "Cassure", pos: long ? "haut" : "bas", prio: 4 });
+      if (x.retest_t) d.push({ k: "point", t: P(x.retest_t), p: x.cassure.p, c: col, r: 4, label: "Retest", pos: long ? "bas" : "haut", prio: 4 });
     }
-    if (x.nom === "CHoCH" && x.niv != null) d.push({ k: "seg", t1: P(x.piv_t), t2: P(x.t), p1: x.niv, p2: x.niv, c: col, w: 1.5, label: "CHoCH", fin: true, pos: long ? "haut" : "bas" });
+    if (x.nom === "CHoCH" && x.niv != null) d.push({ k: "seg", t1: P(x.piv_t), t2: P(x.t), p1: x.niv, p2: x.niv, c: col, w: 1.5, label: "CHoCH", ancre: "fin", alignTexte: "right", pos: long ? "haut" : "bas", prio: 4 });
+  }
+  // sous (long) ou au-dessus (short) de la flèche de l'alerte ouverte : le nom des déclencheurs qui n'ont pas de dessin
+  // (reclaim, bougie de rejet, reprise d'EMA) ; divergence, drapeau, wedge et CHoCH sont nommés sur leur tracé
+  const sansDessin = a.declencheurs.filter(x => !(x.p1 && x.p2) && !(x.a && x.cassure) && !(x.nom === "CHoCH" && x.niv != null));
+  if (c.declencheurs && rows.length && sansDessin.length) {
+    const ia = indexDe(tA), r = rows[ia], tt = temps[ia];
+    const empiles = (marqueursParTemps.get(tt) || []).filter(x => x.id !== a.id && (x.sens === "long") === long).map(x => x.niveau === "setup" ? 1 : 0.6);
+    if (r) d.push({ k: "marque", t: tt, p: long ? r[3] : r[2], dessous: long, empiles, c: a.niveau === "setup" ? (long ? tok("--long") : tok("--short")) : tok("--prepa"),
+                    label: sansDessin.map(courtDecl).join(" + ") });
   }
   if (c.moi) {
     const m = niveauxDe(a), cm = tok("--moi");
     const lignes = [["entree", "Entrée", [3, 3]], ["sl", "Invalidation", []], ["tp1", "TP1", []], ["tp2", "TP2", [2, 3]]];
-    for (const [k, nom, dash] of lignes) if (m[k] != null) d.push({ k: "seg", t1: tA, t2: null, p1: m[k], p2: m[k], c: k === "sl" ? tok("--short") : k.startsWith("tp") ? tok("--long") : cm, w: 1.5, dash, label: `${nom} ${prix(m[k])}`, pos: "dessus" });
+    for (const [k, nom, dash] of lignes) if (m[k] != null) d.push({ k: "seg", t1: tA, t2: null, p1: m[k], p2: m[k], c: k === "sl" ? tok("--short") : k.startsWith("tp") ? tok("--long") : cm, w: 1.5, dash, label: prixNiv(nom, m[k]), gras: true, prio: 5,
+                                                         tTexte: tA + 2 * dur });   // deux bougies après l'alerte : la flèche et son texte restent dégagés
   }
   // profil de volume : comme ton outil (fin du graphique) ou au moment de l'alerte
   if (etat.profil !== "aucun" && rows.length) {
@@ -1018,7 +1102,7 @@ function marqueurs() {
     if (t >= temps[0] && t <= tMax) {
       const tt = temps[indexDe(t)];
       m.push({ time: tt, position: long ? "belowBar" : "aboveBar", color: a.niveau === "setup" ? (long ? tok("--long") : tok("--short")) : tok("--prepa"),
-               shape: a.niveau === "setup" ? (long ? "arrowUp" : "arrowDown") : "circle", size: 2, text: a.declencheurs.map(courtDecl).join(" + ") });
+               shape: a.niveau === "setup" ? (long ? "arrowUp" : "arrowDown") : "circle", size: 2 });   // son texte : posé avec les autres (dessiner)
     }
   }
   m.sort((u, v) => u.time - v.time);
@@ -1341,7 +1425,7 @@ function init(d) {
     setInterval(async () => {
       // flux temps réel bloqué (réseau d'entreprise, proxy…) : on relève les dernières bougies toutes les 10 s
       const tf = etat.tf, c = cacheTF[tf];
-      if (document.hidden || DIRECT.etat === "ok" || !c || !c.direct || DIRECT.releveEnCours) return;
+      if (document.hidden || DIRECT.etat !== "coupe" || !c || !c.direct || DIRECT.releveEnCours) return;
       DIRECT.releveEnCours = true;
       try { await rattraper(tf); if (etat.tf === tf) { DIRECT.releve = Date.now(); planifierRendu(); } } catch (e) { /* nouvel essai dans 10 s */ }
       finally { DIRECT.releveEnCours = false; }
@@ -1370,7 +1454,7 @@ function init(d) {
       el.textContent = "Enregistrement…";
       try {
         await ecrireFichier("config.json", JSON.stringify(cfgEdit, null, 1) + "\n", "Paramètres modifiés depuis le dashboard");
-        D.config = JSON.parse(JSON.stringify(cfgEdit)); marquer();
+        D.config = JSON.parse(JSON.stringify(cfgEdit)); marquer(); dessiner();
         el.innerHTML = `<span class="msg-ok">Enregistré dans ton dépôt. Appliqué à la prochaine vérification.</span>`;
       } catch (e) { el.innerHTML = `<span class="msg-ko">Pas enregistré : ${esc(e.message)}.</span>`; }
     });

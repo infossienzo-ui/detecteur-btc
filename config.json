@@ -158,6 +158,7 @@
   "rsi_zones": [
    70,
    30
-  ]
+  ],
+  "taille_textes": 10
  }
 }

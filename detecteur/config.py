@@ -62,7 +62,7 @@ DEFAUT = {
     "drapeau": {"alerte": "retest", "retest_barres": 10, "retest_tol_atr": 0.1, "wedge_fenetre": 30},
     "pre_alertes": {"actif": True, "prix_dans_zone": True, "cassure_attente_retest": True, "sweep_attente": True},
     "alertes": {"suivi_jours": 10, "pre_alerte_heures": 48},
-    "affichage": {"fvg_max": 50, "rsi_zones": [70, 30]},
+    "affichage": {"fvg_max": 50, "rsi_zones": [70, 30], "taille_textes": 10},
 }
 
 # (chemin, libellé, type, aide) ; type : bool, int, float, choix:a|b, liste:H1|H2|..., txt
@@ -167,6 +167,7 @@ SCHEMA = [
     ]),
     ("Affichage", [
         ("affichage.fvg_max", "FVG affichées au maximum", "int", "Comme ton indicateur FVG (50)."),
+        ("affichage.taille_textes", "Taille des textes du graphique", "int", "En pixels (10 par défaut) : les textes collés aux niveaux, aux zones et aux déclencheurs."),
     ]),
     ("Alertes", [
         ("alertes.suivi_jours", "Une alerte par zone pendant (jours)", "int", "Pas de nouvelle alerte sur la même zone tant qu'elle n'est pas cassée, ou pendant ce délai."),
