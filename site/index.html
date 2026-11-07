@@ -67,6 +67,20 @@ button { cursor: pointer; }
 .pastille.vivant i { animation: pouls 2s ease-out infinite; }
 @keyframes pouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--long) 60%, transparent); } 80%, 100% { box-shadow: 0 0 0 6px transparent; } }
 .ligne-outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fibo-reglages { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; background: var(--bg); display: grid; gap: 8px; font-size: 12.5px; }
+.fr-ligne { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.fr-ligne > b { min-width: 86px; font-weight: 600; }
+.fr-ligne label { display: inline-flex; gap: 4px; align-items: center; }
+.fr-ligne input[type=color] { width: 26px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+.fr-ligne select { font-size: 12px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.fr-niveaux { display: flex; flex-wrap: wrap; gap: 6px; }
+.fr-niv { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 3px; background: var(--panel); }
+.fr-niv input[type=number] { width: 58px; font: inherit; font-family: var(--f-chiffres); border: 0; background: none; color: var(--ink); }
+.fr-x { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 0 3px; cursor: pointer; }
+.fr-trace { display: inline-flex; gap: 4px; align-items: center; }
+#graph.poignee, #graph.poignee * { cursor: grab !important; }
+#graph.glisse, #graph.glisse * { cursor: grabbing !important; }
+#graph.trace, #graph.trace * { cursor: crosshair !important; }
 .btn-mini { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--ink); }
 .annonce { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 20; display: flex; gap: 10px; align-items: center;
   background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--setup); border-radius: 10px; padding: 8px 10px 8px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
@@ -239,6 +253,14 @@ tr.titre td { font-weight: 600; background: var(--panel-2); }
                 <button type="button" data-profil="alerte" aria-pressed="false">Au moment de l'alerte</button>
                 <button type="button" data-profil="aucun" aria-pressed="false">Masqué</button>
               </span></div>
+            <div class="profil-choix" id="fibo-choix"><b>Fibo 1h · 4h · 6h · D :</b>
+              <span class="seg" role="group" aria-label="Fibo">
+                <button type="button" data-fibo="maintenant" aria-pressed="true">Maintenant</button>
+                <button type="button" data-fibo="alerte" aria-pressed="false">Au moment de l'alerte</button>
+              </span>
+              <button class="btn-mini" type="button" id="fibo-tracer">✏️ Tracer un Fibo</button>
+              <button class="btn-mini" type="button" id="fibo-ouvrir" aria-expanded="false">⚙ Réglages Fibo</button></div>
+            <div class="fibo-reglages" id="fibo-reglages" hidden></div>
           </div>
           <div class="zone-graph">
             <div id="graph"></div>
@@ -956,6 +978,290 @@ const NOM_ZONE = { OB: "Order block", FVG: "Imbalance (FVG)", Fibo: "Fibo", POC:
 const fiboTexte = r => String(r).replace(".", ",");
 const nomFibo = z => z.niveau && z.niveau.length === 2 ? `Golden zone ${fiboTexte(z.niveau[0])}–${fiboTexte(z.niveau[1])}` : `Fibo ${fiboTexte(z.niveau ? z.niveau[0] : "")}`;
 
+// ------------------------------------------------------------------ Fibo : 1h, 4h, 6h, D comme le détecteur ; réglages ; tracés
+// Jambe d'impulsion = même calcul que le détecteur (swings à 2 bougies, BOS / CHoCH à la clôture) : de l'extrême entre le
+// swing cassé et la cassure jusqu'à l'extrême atteint depuis. Réglages, points déplacés et Fibo tracés : enregistrés avec
+// tes niveaux (ce navigateur, et ton dépôt si le jeton est enregistré).
+const FIBO_TFS = ["H1", "H4", "H6", "D"];
+const FIBO_DEFAUT = {
+  moment: "maintenant", tfs: { H1: true, H4: true, H6: true, D: true },
+  couleurs: { H1: "#2a9d8f", H4: "#c99312", H6: "#e07a2f", D: "#8e5bd8", trace: "#3a7bd5" },
+  niveaux: [[0, true], [0.236, false], [0.382, true], [0.5, true], [0.618, true], [0.65, true], [0.705, true], [0.786, false], [1, true], [1.272, false], [1.618, false]],
+  golden: true, style: "tirets", epaisseur: 1, prolonger: true, texteNiveau: true, textePrix: true, position: "alternes",
+};
+function fiboData() {
+  if (!MOI._fibo || typeof MOI._fibo !== "object") MOI._fibo = {};
+  const f = MOI._fibo, r = f.reglages || {};
+  f.reglages = Object.assign({}, FIBO_DEFAUT, r, { tfs: Object.assign({}, FIBO_DEFAUT.tfs, r.tfs), couleurs: Object.assign({}, FIBO_DEFAUT.couleurs, r.couleurs),
+    niveaux: Array.isArray(r.niveaux) ? r.niveaux : FIBO_DEFAUT.niveaux.map(x => x.slice()) });
+  if (!Array.isArray(f.traces)) f.traces = [];
+  if (!f.ancres || typeof f.ancres !== "object") f.ancres = {};
+  return f;
+}
+const cacheStructure = {};
+function structureTF(tf) {
+  const d = cacheTF[tf];
+  if (!d || !d.lignes || d.lignes.length < 10) return null;
+  const L = d.lignes, N = L.length, n = D.config.general.swing_n, cle = N + ":" + L[N - 1][0] + ":" + L[N - 2][4];
+  const c0 = cacheStructure[tf];
+  if (c0 && c0.lignes === L && c0.cle === cle) return c0;
+  const h = i => L[i][2], l = i => L[i][3], c = i => L[i][4];
+  const sh = new Uint8Array(N), sl = new Uint8Array(N);
+  for (let i = n; i < N - n; i++) {
+    let a = true, b = true;
+    for (let k = 1; k <= n; k++) { a = a && h(i) > h(i - k) && h(i) > h(i + k); b = b && l(i) < l(i - k) && l(i) < l(i + k); }
+    sh[i] = a; sl[i] = b;
+  }
+  const T = new Int8Array(N), JD = new Int32Array(N), JF = new Int32Array(N);
+  let csh = null, csl = null, tr = 0, jd = -1, jf = -1;
+  for (let t = 0; t < N; t++) {
+    const i = t - n;
+    if (i >= n) { if (sh[i]) csh = [h(i), i]; if (sl[i]) csl = [l(i), i]; }
+    if (csh && c(t) > csh[0]) {
+      let e = csh[1]; for (let k = e + 1; k <= t; k++) if (l(k) < l(e)) e = k;
+      let f = e; for (let k = e + 1; k <= t; k++) if (h(k) > h(f)) f = k;
+      tr = 1; jd = e; jf = f; csh = null;
+    } else if (csl && c(t) < csl[0]) {
+      let e = csl[1]; for (let k = e + 1; k <= t; k++) if (h(k) > h(e)) e = k;
+      let f = e; for (let k = e + 1; k <= t; k++) if (l(k) < l(f)) f = k;
+      tr = -1; jd = e; jf = f; csl = null;
+    } else if (jf >= 0) {
+      if (tr === 1 && h(t) > h(jf)) jf = t; else if (tr === -1 && l(t) < l(jf)) jf = t;
+    }
+    T[t] = tr; JD[t] = jd; JF[t] = jf;
+  }
+  return (cacheStructure[tf] = { lignes: L, cle, T, JD, JF });
+}
+function jambeTF(tf, tau) {
+  // jambe à la clôture de la dernière bougie du timeframe terminée avant tau (secondes UTC ; maintenant si tau est absent)
+  const s = structureTF(tf);
+  if (!s) return null;
+  const L = s.lignes, dur = DUREE[tf], lim = tau ?? Date.now() / 1000;
+  let a = 0, b = L.length - 1;
+  if (L[0][0] + dur > lim) return null;
+  while (a < b) { const m = (a + b + 1) >> 1; if (L[m][0] + dur <= lim) a = m; else b = m - 1; }
+  const jd = s.JD[a], jf = s.JF[a];
+  if (jd < 0 || jf <= jd) return null;
+  const hausse = s.T[a] === 1;
+  return { cle: `${tf}:${L[jd][0]}`, tf, debut: { t: L[jd][0], p: hausse ? L[jd][3] : L[jd][2] }, fin: { t: L[jf][0], p: hausse ? L[jf][2] : L[jf][3] } };
+}
+const chargesFibo = new Set();
+function assurerDonneesFibo() {
+  // bougies des timeframes du Fibo, chargées en arrière-plan
+  if (!etat.calques.fibo) return;
+  const R = fiboData().reglages;
+  for (const tf of FIBO_TFS) if (R.tfs[tf] && !cacheTF[tf] && !chargesFibo.has(tf) && !tfAbsent(tf)) {
+    chargesFibo.add(tf);
+    chargerTF(tf).then(() => dessiner()).catch(() => {}).finally(() => chargesFibo.delete(tf));
+  }
+}
+function dessinsFibo(d, a, tRepere) {
+  if (!etat.calques.fibo) return;
+  assurerDonneesFibo();
+  const F = fiboData(), R = F.reglages, vus = new Map();
+  if (a) for (const z of a.zones) if (z.fibo) {   // Fibo de la zone de l'alerte : sa zone et ses niveaux en gras
+    const cle = `${z.tf}:${z.fibo.debut.t}`;
+    if (!vus.has(cle)) vus.set(cle, { cle, tf: z.tf, debut: z.fibo.debut, fin: z.fibo.fin, gras: new Set(), zones: [], alerte: true });
+    const j = vus.get(cle);
+    for (const r of z.niveau || []) j.gras.add(r);
+    j.zones.push(z);
+  }
+  for (const tf of FIBO_TFS) if (R.tfs[tf]) {
+    const j = jambeTF(tf, R.moment === "alerte" && a ? a.heure : null);
+    if (j && !vus.has(j.cle)) vus.set(j.cle, Object.assign(j, { gras: new Set(), zones: [] }));
+    else if (j) vus.get(j.cle).alerte = false;   // même jambe que celle de l'alerte
+  }
+  for (const j of vus.values()) {
+    const o = F.ancres[j.cle];
+    if (o) { if (o.debut) j.debut = o.debut; if (o.fin) j.fin = o.fin; }
+    pousserFibo(d, j, R.couleurs[j.tf] || tok("--z-fibo"), `Fibo ${tfn(j.tf)}${j.alerte ? " · alerte" : ""}${o ? " (déplacé)" : ""}`, tRepere);
+  }
+  F.traces.forEach((t, k) => pousserFibo(d, { cle: "trace:" + t.id, debut: t.debut, fin: t.fin, gras: new Set(), zones: [] }, R.couleurs.trace, `Fibo tracé ${k + 1}`, tRepere));
+}
+function pousserFibo(d, f, col, nom, tRepere) {
+  const R = fiboData().reglages, [g0, g1] = D.config.strat1.fibo_golden;
+  const H = f.fin.p, L = f.debut.p, t0 = P(f.debut.t), t1 = P(f.fin.t), tg = Math.min(t0, t1), td = Math.max(t0, t1);
+  const t2 = R.prolonger ? null : td, dash = { plein: [], tirets: [6, 4], points: [2, 3] }[R.style] || [6, 4], w = +R.epaisseur || 1;
+  let tTexte = tRepere != null ? Math.max(tg, tRepere) : tg;
+  if (!R.prolonger) tTexte = Math.min(tTexte, td);
+  if (R.golden) d.push({ k: "rect", couche: "fond", t1: tg, t2, p1: H - g0 * (H - L), p2: H - g1 * (H - L), c: col, alpha: 0.12, bord: false });
+  for (const z of f.zones) d.push({ k: "rect", couche: "fond", t1: tg, t2, p1: z.lo, p2: z.hi, c: col, alpha: 0.28 });   // zone de l'alerte
+  d.push({ k: "seg", t1: t0, t2: t1, p1: L, p2: H, c: col, w: 1, dash: [4, 4] });
+  // départ et arrivée : poignées à déplacer à la souris ou au doigt
+  d.push({ k: "point", t: t0, p: L, c: col, r: 5, label: nom, pos: "gauche", poignee: { cle: f.cle, bout: "debut" } });
+  d.push({ k: "point", t: t1, p: H, c: col, r: 5, poignee: { cle: f.cle, bout: "fin" } });
+  if (tTexte !== tg) d.push({ k: "texte", t: tTexte, p: L, c: col, label: nom, cote: "gauche" });
+  const niv = R.niveaux.filter(x => x[1] && isFinite(+x[0])).map(x => +x[0]).sort((u, v) => u - v);
+  niv.forEach((r, k) => {
+    const p = H - r * (H - L), gras = f.gras.has(r);
+    const txt = [R.texteNiveau ? fiboTexte(r) : "", R.textePrix ? prix(p) : ""].filter(Boolean).join(" · ");
+    const cote = R.position === "gauche" ? "gauche" : R.position === "droite" ? "droite" : (niv.length - 1 - k) % 2 ? "gauche" : "droite";
+    d.push({ k: "seg", t1: tg, t2, p1: p, p2: p, c: col, w: gras ? w + 0.5 : w, dash, label: txt || undefined, tTexte, cote, gras, prio: gras ? 4.5 : 3 });
+  });
+}
+// ------------------------------------------------------------------ Fibo : déplacer les points, tracer, réglages
+function ecranDe(t, p) {
+  const ts = chart.timeScale(), l = logique(t), i = Math.floor(l), xi = ts.logicalToCoordinate(i), y = serie.priceToCoordinate(p);
+  const ec = (ts.logicalToCoordinate(1) ?? 0) - (ts.logicalToCoordinate(0) ?? 0) || 6;
+  return xi == null || y == null ? null : { x: xi + (l - i) * ec, y };
+}
+function pointDe(x, y) {
+  // bougie et prix sous le pointeur ; aimant sur le plus haut / plus bas de la bougie à moins de 12 px
+  const l = chart.timeScale().coordinateToLogical(x);
+  let p = serie.coordinateToPrice(y);
+  if (l == null || p == null || !rows.length) return null;
+  const i = Math.round(l), n = rows.length, dur = DUREE[etat.tf];
+  let t;
+  if (i >= 0 && i < n) {
+    t = rows[i][0];
+    const yh = serie.priceToCoordinate(rows[i][2]), yl = serie.priceToCoordinate(rows[i][3]);
+    if (yh != null && Math.abs(yh - y) < 12) p = rows[i][2]; else if (yl != null && Math.abs(yl - y) < 12) p = rows[i][3];
+  } else t = i < 0 ? rows[0][0] + i * dur : rows[n - 1][0] + (i - n + 1) * dur;
+  return { t, p: Math.round(p * 10) / 10 };
+}
+let dessinPrevu = false;
+function redessinerBientot() { if (dessinPrevu) return; dessinPrevu = true; requestAnimationFrame(() => { dessinPrevu = false; dessiner(); }); }
+function consigneFibo(txt) {
+  const el = document.getElementById("consigne");
+  el.textContent = txt || ""; el.hidden = !txt;
+  document.getElementById("graph").classList.toggle("trace", !!etat.traceFibo);
+}
+function quitterTrace() { etat.traceFibo = null; consigneFibo(null); }
+function brancherFibo() {
+  const g = document.getElementById("graph");
+  let glisse = null;
+  const pos = e => { const r = g.getBoundingClientRect(), s = e.touches ? (e.touches[0] || e.changedTouches[0]) : e; return { x: s.clientX - r.left, y: s.clientY - r.top }; };
+  const sous = q => {
+    let best = null, dmin = 12;
+    for (const o of calque.d) if (o.poignee) {
+      const s = ecranDe(o.t, o.p);
+      if (!s) continue;
+      const dd = Math.hypot(s.x - q.x, s.y - q.y);
+      if (dd < dmin) { dmin = dd; best = o.poignee; }
+    }
+    return best;
+  };
+  const appui = e => {
+    if (!temps.length || (e.button != null && e.button !== 0)) return;
+    const q = pos(e);
+    if (q.x > chart.timeScale().width()) return;   // échelle de prix
+    if (etat.traceFibo) {
+      e.preventDefault(); e.stopPropagation();
+      const pt = pointDe(q.x, q.y);
+      if (!pt) return;
+      if (!etat.traceFibo.debut) { etat.traceFibo.debut = pt; consigneFibo("Fibo : clique le point d'arrivée (Échap pour annuler)"); return; }
+      const F = fiboData();
+      F.traces.push({ id: Date.now().toString(36), debut: etat.traceFibo.debut, fin: pt });
+      quitterTrace(); ecrireMoi(MOI); dessiner(); majReglagesFibo();
+      return;
+    }
+    const h = sous(q);
+    if (!h) return;
+    e.preventDefault(); e.stopPropagation();
+    glisse = h; g.classList.add("glisse");
+  };
+  const deplace = e => {
+    if (!glisse) {
+      if (!e.touches && g.contains(e.target)) g.classList.toggle("poignee", !etat.traceFibo && !!sous(pos(e)));
+      return;
+    }
+    e.preventDefault(); e.stopPropagation();
+    const q = pos(e), pt = pointDe(q.x, q.y);
+    if (!pt) return;
+    const F = fiboData();
+    if (glisse.cle.startsWith("trace:")) { const t = F.traces.find(x => "trace:" + x.id === glisse.cle); if (t) t[glisse.bout] = pt; }
+    else (F.ancres[glisse.cle] || (F.ancres[glisse.cle] = {}))[glisse.bout] = pt;
+    redessinerBientot();
+  };
+  const lache = e => {
+    if (!glisse) return;
+    e.preventDefault(); e.stopPropagation();
+    glisse = null; g.classList.remove("glisse");
+    ecrireMoi(MOI); dessiner(); majReglagesFibo();
+  };
+  g.addEventListener("mousedown", appui, true);
+  g.addEventListener("touchstart", appui, { capture: true, passive: false });
+  window.addEventListener("mousemove", deplace, true);
+  window.addEventListener("touchmove", deplace, { capture: true, passive: false });
+  window.addEventListener("mouseup", lache, true);
+  window.addEventListener("touchend", lache, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && etat.traceFibo) quitterTrace(); });
+  document.getElementById("fibo-tracer").addEventListener("click", () => {
+    if (etat.traceFibo) { quitterTrace(); return; }
+    etat.placement = null;
+    etat.traceFibo = {}; consigneFibo("Fibo : clique le point de départ (Échap pour annuler)");
+  });
+  document.getElementById("fibo-choix").addEventListener("click", e => {
+    const b = e.target.closest("[data-fibo]");
+    if (!b) return;
+    fiboData().reglages.moment = b.dataset.fibo; ecrireMoi(MOI);
+    majChoixFibo(); dessiner();
+  });
+  document.getElementById("fibo-ouvrir").addEventListener("click", e => {
+    const el = document.getElementById("fibo-reglages");
+    el.hidden = !el.hidden; e.currentTarget.setAttribute("aria-expanded", !el.hidden);
+    majReglagesFibo();
+  });
+  const zone = document.getElementById("fibo-reglages");
+  zone.addEventListener("change", e => {
+    const x = e.target, R = fiboData().reglages, k = x.dataset.fr;
+    if (!k) return;
+    if (k === "tf") R.tfs[x.dataset.tf] = x.checked;
+    else if (k === "couleur") R.couleurs[x.dataset.tf] = x.value;
+    else if (k === "niv-on") R.niveaux[+x.dataset.i][1] = x.checked;
+    else if (k === "niv-val") { const v = parseFloat(String(x.value).replace(",", ".")); if (isFinite(v)) R.niveaux[+x.dataset.i][0] = v; }
+    else if (x.type === "checkbox") R[k] = x.checked;
+    else R[k] = k === "epaisseur" ? +x.value : x.value;
+    ecrireMoi(MOI); dessiner(); legende();
+  });
+  zone.addEventListener("click", e => {
+    const x = e.target.closest("[data-fr]");
+    if (!x || x.tagName === "INPUT" || x.tagName === "SELECT") return;
+    const F = fiboData(), R = F.reglages, k = x.dataset.fr;
+    if (k === "niv-suppr") R.niveaux.splice(+x.dataset.i, 1);
+    else if (k === "niv-ajout") R.niveaux.push([0.786, true]);
+    else if (k === "trace-suppr") F.traces = F.traces.filter(t => t.id !== x.dataset.id);
+    else if (k === "ancres-raz") F.ancres = {};
+    else if (k === "defaut") F.reglages = JSON.parse(JSON.stringify(FIBO_DEFAUT));
+    else return;
+    ecrireMoi(MOI); majReglagesFibo(); majChoixFibo(); dessiner(); legende();
+  });
+  majChoixFibo();
+  // timeframes du Fibo autres que celui affiché : bougies remises à jour chaque minute
+  setInterval(() => {
+    if (!directPossible() || document.hidden || !etat.calques.fibo) return;
+    const R = fiboData().reglages;
+    for (const tf of FIBO_TFS) if (R.tfs[tf] && tf !== etat.tf && cacheTF[tf] && cacheTF[tf].direct) rattraper(tf).then(redessinerBientot).catch(() => {});
+  }, 60000);
+}
+function majChoixFibo() {
+  const m = fiboData().reglages.moment;
+  document.querySelectorAll("[data-fibo]").forEach(x => x.setAttribute("aria-pressed", x.dataset.fibo === m));
+}
+function majReglagesFibo() {
+  const el = document.getElementById("fibo-reglages");
+  if (el.hidden) return;
+  const F = fiboData(), R = F.reglages, coche = v => v ? "checked" : "", sel = (v, w) => v === w ? "selected" : "";
+  el.innerHTML = `
+    <div class="fr-ligne"><b>Timeframes</b>${FIBO_TFS.map(tf => `<label><input type="checkbox" data-fr="tf" data-tf="${tf}" ${coche(R.tfs[tf])}>${tfn(tf)}<input type="color" data-fr="couleur" data-tf="${tf}" value="${esc(R.couleurs[tf])}" aria-label="Couleur du Fibo ${tfn(tf)}"></label>`).join("")}
+      <label>Tes tracés<input type="color" data-fr="couleur" data-tf="trace" value="${esc(R.couleurs.trace)}" aria-label="Couleur de tes Fibo"></label></div>
+    <div class="fr-ligne"><b>Niveaux</b><span class="fr-niveaux">${R.niveaux.map((x, i) => `<span class="fr-niv"><input type="checkbox" data-fr="niv-on" data-i="${i}" ${coche(x[1])} aria-label="Afficher le niveau"><input type="number" step="0.001" data-fr="niv-val" data-i="${i}" value="${x[0]}" aria-label="Valeur du niveau"><button type="button" class="fr-x" data-fr="niv-suppr" data-i="${i}" aria-label="Retirer ce niveau">×</button></span>`).join("")}</span>
+      <button type="button" class="btn-mini" data-fr="niv-ajout">+ niveau</button></div>
+    <div class="fr-ligne"><b>Lignes</b>
+      <select data-fr="style" aria-label="Style"><option value="plein" ${sel(R.style, "plein")}>Pleines</option><option value="tirets" ${sel(R.style, "tirets")}>Tirets</option><option value="points" ${sel(R.style, "points")}>Pointillés</option></select>
+      <select data-fr="epaisseur" aria-label="Épaisseur">${[1, 2, 3, 4].map(v => `<option value="${v}" ${sel(+R.epaisseur, v)}>${v} px</option>`).join("")}</select>
+      <label><input type="checkbox" data-fr="prolonger" ${coche(R.prolonger)}>Prolonger à droite</label>
+      <label><input type="checkbox" data-fr="golden" ${coche(R.golden)}>Remplir la golden zone</label></div>
+    <div class="fr-ligne"><b>Textes</b>
+      <label><input type="checkbox" data-fr="texteNiveau" ${coche(R.texteNiveau)}>Niveau</label>
+      <label><input type="checkbox" data-fr="textePrix" ${coche(R.textePrix)}>Prix</label>
+      <select data-fr="position" aria-label="Position des textes"><option value="alternes" ${sel(R.position, "alternes")}>Un sur deux de chaque côté</option><option value="gauche" ${sel(R.position, "gauche")}>À gauche</option><option value="droite" ${sel(R.position, "droite")}>À droite</option></select></div>
+    <div class="fr-ligne"><b>Tes Fibo</b>${F.traces.length ? F.traces.map((t, k) => `<span class="fr-trace">Fibo tracé ${k + 1}<button type="button" class="fr-x" data-fr="trace-suppr" data-id="${esc(t.id)}">Supprimer</button></span>`).join("") : `<span class="note">Aucun : « Tracer un Fibo », puis le point de départ et le point d'arrivée sur le graphique.</span>`}
+      ${Object.keys(F.ancres).length ? `<button type="button" class="btn-mini" data-fr="ancres-raz">Remettre les points du détecteur</button>` : ""}</div>
+    <div class="fr-ligne"><button type="button" class="btn-mini" data-fr="defaut">Réglages par défaut</button>
+      <span class="note">Les points de départ et d'arrivée se déplacent à la souris ou au doigt (aimant sur les mèches). Enregistré dans ce navigateur${GH.jeton ? " et dans ton dépôt" : ""}.</span></div>`;
+}
+
 function dessiner() {
   const a = etat.a, c = etat.calques, d = [], dr = [];
   if (c.fvg) d.push({ k: "fvg", couche: "fond", liste: fvgs, max: D.config.affichage.fvg_max });
@@ -964,15 +1270,19 @@ function dessiner() {
   if (directPossible() && rows.length && Date.now() / 1000 - finDet > 3 * 3600 && finDet <= rows[rows.length - 1][0])
     d.push({ k: "vline", t: P(finDet), c: tok("--prepa"), label: "Détection arrêtée ici" });
   marqueurs();
+  // Fibo 1h, 4h, 6h, D (et celui de la zone de l'alerte), tes Fibo tracés
+  let tRepereFibo = null;
+  if (a) {
+    // textes des deux côtés du point d'ancrage ; dans le cadrage par défaut, il reste à gauche la place d'un texte
+    const pxBarre = Math.max(1, chart.timeScale().width()) / (avantAlerte() + 35), dA = DUREE[etat.tf];
+    tRepereFibo = P(a.bougie) - Math.max(5, avantAlerte() - Math.max(Math.ceil(100 / pxBarre), Math.round(avantAlerte() * 0.4))) * dA;
+  }
+  dessinsFibo(d, a, tRepereFibo);
   if (!a) { calque.fixer(d); calqueRsi.fixer([]); return; }
   const tA = P(a.bougie), dur = DUREE[etat.tf], long = a.sens === "long";
   // Textes des niveaux : à l'origine du niveau ; s'il commence avant le cadrage par défaut de l'alerte, à un repère fixe
   // près du bord gauche de ce cadrage. Le repère est une date : le texte suit le graphique et ne glisse jamais.
   const tRepere = tA - Math.round(avantAlerte() * 0.85) * dur, ancre = t => Math.max(t, tRepere);
-  // Fibo : textes des deux côtés du point d'ancrage ; dans le cadrage par défaut, il reste à gauche la place d'un texte
-  // (une centaine de pixels), même sur téléphone
-  const pxBarre = Math.max(1, chart.timeScale().width()) / (avantAlerte() + 35);
-  const tRepereFibo = tA - Math.max(5, avantAlerte() - Math.max(Math.ceil(100 / pxBarre), Math.round(avantAlerte() * 0.4))) * dur;
   const prixNiv = (nom, p) => `${nom} · ${prix(p)}`;
   if (c.zones) for (const z of a.zones) {
     const col = couleurZone(z.type), nomz = `${z.type} ${tfn(z.tf)}`, milieu = (z.lo + z.hi) / 2;
@@ -997,34 +1307,6 @@ function dessiner() {
     } else {
       // POC / VAH / VAL : niveaux du profil au moment de l'alerte, à partir de l'alerte vers la droite
       d.push({ k: "rect", couche: "fond", t1: tA, t2: null, p1: z.lo, p2: z.hi, c: col, label: prixNiv(nomz, milieu) });
-    }
-  }
-  if (c.fibo) {
-    const cfg = D.config.strat1, col = tok("--z-fibo"), [g0, g1] = cfg.fibo_golden, jambes = new Map();
-    // une jambe d'impulsion par timeframe de contexte ; ses niveaux qui contiennent la clôture du déclencheur sont en gras
-    for (const z of a.zones) if (z.fibo) {
-      const cle = z.fibo.debut.t + "-" + z.fibo.fin.t;
-      if (!jambes.has(cle)) jambes.set(cle, { f: z.fibo, tf: z.tf, alerte: new Set(), zones: [] });
-      const j = jambes.get(cle);
-      for (const r of z.niveau || []) j.alerte.add(r);
-      j.zones.push(z);
-    }
-    for (const { f, tf, alerte, zones } of jambes.values()) {
-      const H = f.fin.p, L = f.debut.p, t0 = P(f.debut.t), tTexte = Math.max(t0, tRepereFibo);
-      d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: H - g0 * (H - L), p2: H - g1 * (H - L), c: col, alpha: 0.14, bord: false });
-      for (const z of zones) d.push({ k: "rect", couche: "fond", t1: t0, t2: null, p1: z.lo, p2: z.hi, c: col, alpha: 0.3 });   // zone de l'alerte
-      d.push({ k: "seg", t1: t0, t2: P(f.fin.t), p1: L, p2: H, c: col, w: 1.5, dash: [6, 4] });
-      d.push({ k: "point", t: t0, p: L, c: col, r: 4, label: `Fibo ${tfn(tf)}`, pos: "gauche" });
-      if (tTexte !== t0) d.push({ k: "texte", t: tTexte, p: L, c: col, label: `Fibo ${tfn(tf)}`, cote: "gauche" });   // départ hors du cadrage
-      d.push({ k: "point", t: P(f.fin.t), p: H, c: col, r: 4, label: prixNiv("0", H), pos: H > L ? "haut" : "bas" });
-      // Textes posés sur leur ligne, un niveau sur deux de chaque côté du point d'ancrage : deux niveaux voisins
-      // (0,618 / 0,65 / 0,705 sont très proches) ne se recouvrent pas, sans jamais déplacer un texte. Le 1 est à droite.
-      const niv = cfg.fibo_niveaux.slice().sort((u, v) => u - v);
-      niv.forEach((r, k) => {
-        const p = H - r * (H - L), gold = r >= g0 && r <= g1;
-        d.push({ k: "seg", t1: t0, t2: null, p1: p, p2: p, c: col, w: 1, dash: gold ? [] : [3, 3], label: prixNiv(fiboTexte(r), p), tTexte,
-                 cote: (niv.length - 1 - k) % 2 ? "gauche" : "droite", gras: alerte.has(r), prio: alerte.has(r) ? 4.5 : gold ? 3.5 : 3 });
-      });
     }
   }
   if (c.structure && a.cassure) {
@@ -1115,7 +1397,12 @@ function courtDecl(x) {
 function legende() {
   const a = etat.a, el = document.getElementById("legende");
   const types = a ? [...new Set(a.zones.map(z => z.type))] : [];
-  const items = types.map(t => `<span><i style="background:${couleurZone(t)}"></i>${esc(NOM_ZONE[t] || t)}</span>`);
+  const items = types.filter(t => t !== "Fibo").map(t => `<span><i style="background:${couleurZone(t)}"></i>${esc(NOM_ZONE[t] || t)}</span>`);
+  if (etat.calques.fibo) {
+    const R = fiboData().reglages;
+    for (const tf of FIBO_TFS) if (R.tfs[tf]) items.push(`<span><i style="background:${esc(R.couleurs[tf])}"></i>Fibo ${tfn(tf)}</span>`);
+    if (fiboData().traces.length) items.push(`<span><i style="background:${esc(R.couleurs.trace)}"></i>Tes Fibo</span>`);
+  }
   if (etat.calques.fvg) items.push(`<span><i style="background:${tok("--fvg-h")}"></i>FVG ${tfn(etat.tf)} pas encore comblées (${D.config.affichage.fvg_max} au plus)</span>`);
   if (etat.calques.ema) D.config.general.emas.forEach(k => items.push(`<span><i style="background:${couleurEma(k)};height:2px"></i>EMA ${k}</span>`));
   if (etat.calques.toutes) items.push(`<span>▲▼ setups · ● pré-alertes : clique dessus pour les ouvrir</span>`);
@@ -1476,6 +1763,7 @@ function init(d) {
     else if (etat.profil === "alerte") centrer();
   });
   creerGraph();
+  brancherFibo();
   pageFrequence();
   pageParams();
   document.getElementById("items").addEventListener("click", e => {
@@ -1501,6 +1789,7 @@ function init(d) {
   document.getElementById("fiche").addEventListener("click", e => {
     if (e.target.id === "effacer-moi") { delete MOI[etat.a.id]; ecrireMoi(MOI); fiche(); dessiner(); liste(); return; }
     const b = e.target.closest("[data-placer]"); if (!b) return;
+    if (etat.traceFibo) quitterTrace();
     etat.placement = etat.placement === b.dataset.placer ? null : b.dataset.placer;
     const cons = document.getElementById("consigne");
     cons.textContent = "Clique sur le graphique au prix voulu"; cons.hidden = !etat.placement;
