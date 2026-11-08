@@ -275,7 +275,7 @@ def main():
     envoyees = set(etat.get("envoyees", []))
     a_envoyer = [a for a in alertes if a["tau"] > max(dernier or 0, seuil) and not a.get("filtree_rr")]
     if not etat.get("telegram_ok"):
-        if telegram(f"✅ <b>Détecteur BTC en ligne</b>\nTu recevras ici les setups détectés.\n<a href=\"{url}\">Ouvrir le dashboard</a>"):
+        if telegram(f"✅ <b>Notifications activées</b>\nTon outil d'analyse BTC t'enverra ici ses alertes.\n<a href=\"{url}\">Ouvrir le tableau de bord</a>"):
             etat["telegram_ok"] = True
     nb = 0
     for al in sorted(a_envoyer, key=lambda x: x["tau"]):
