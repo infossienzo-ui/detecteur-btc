@@ -1,10 +1,11 @@
 name: Détecteur BTC
 
-# Toutes les 15 minutes, hors des minutes pleines (GitHub retarde ou saute des exécutions planifiées quand ses serveurs
-# sont chargés, surtout à l'heure pile) : une vérification tombe peu après chaque clôture 1h. Et à la demande.
+# Lancée toutes les 15 minutes (à 7, 22, 37 et 52) par cron-job.org, qui appelle workflow_dispatch : le planning de
+# GitHub saute la plupart de ses exécutions. Il reste ici en secours, une fois par heure ; une exécution en double est
+# sans effet (une alerte n'est jamais envoyée deux fois).
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "41 * * * *"
   workflow_dispatch:
 
 permissions:
