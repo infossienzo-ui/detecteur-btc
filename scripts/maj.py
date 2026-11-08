@@ -109,7 +109,7 @@ def _get_json(url, headers=None, essais=4):
 
 
 def bougies_coinalyze(tf, debut, fin):
-    cle = os.environ.get("COINALYZE_API_KEY")
+    cle = secret("COINALYZE_API_KEY")
     if not cle:
         raise RuntimeError("secret COINALYZE_API_KEY absent")
     pas = SECONDES[tf]
@@ -230,8 +230,13 @@ def message(a, url):
     return f"{tete}\n{esc(l2)}\n{esc(l3)}\n{esc(l4)}{esc(notes)}\n<a href=\"{url}#{a['id']}\">→ Voir le graphique</a>"
 
 
+def secret(nom):
+    """Secret du dépôt sans espaces ni retours à la ligne collés avec (fréquent au copier-coller)."""
+    return (os.environ.get(nom) or "").strip()
+
+
 def telegram(texte):
-    tok, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    tok, chat = secret("TELEGRAM_TOKEN"), secret("TELEGRAM_CHAT_ID")
     if not tok or not chat:
         log("   Telegram non configuré (secrets TELEGRAM_TOKEN / TELEGRAM_CHAT_ID) : message non envoyé")
         return False
@@ -298,8 +303,8 @@ def main():
     freq = export_web.frequence(alertes, int(debut.value), fin_ns)
     meta = {"maquette": False, "derniere_verification": int(maintenant.value // NS), "depot": depot, "url": url,
             "source": source or "aucune source perp joignable à cette vérification (historique inchangé)",
-            "sources_bas_tf": sources_bas, "cle_coinalyze": bool(os.environ.get("COINALYZE_API_KEY")),
-            "telegram": bool(os.environ.get("TELEGRAM_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")),
+            "sources_bas_tf": sources_bas, "cle_coinalyze": bool(secret("COINALYZE_API_KEY")),
+            "telegram": bool(secret("TELEGRAM_TOKEN") and secret("TELEGRAM_CHAT_ID")),
             "message_absents": "Bougies indisponibles à cette vérification : la source n'a pas répondu."}
     export_web.ecrire_tout(M, alertes, int((h1.index[-1] - pd.Timedelta(days=365)).value), fin_ns, cfg, freq,
                            str(DOSSIER_SITE), meta["source"], meta_extra=meta, bas_tf=bas)
