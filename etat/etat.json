@@ -2,7 +2,7 @@
  "dernier_tau": 1794128400000000000,
  "envoyees": [],
  "facteur_volume": 1.0000000000000018,
- "derniere_verification": "2026-11-08 09:42 UTC",
+ "derniere_verification": "2026-11-08 09:44 UTC",
  "source": "Coinalyze · Binance perp",
- "telegram_ok": false
+ "telegram_ok": true
 }
