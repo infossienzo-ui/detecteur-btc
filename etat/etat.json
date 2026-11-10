@@ -1,5 +1,5 @@
 {
- "dernier_tau": 1794279600000000000,
+ "dernier_tau": 1794283200000000000,
  "envoyees": [
   "S1-S-H1-1794189600",
   "S1-S-H1-1794193200",
@@ -12,7 +12,7 @@
   "S1-S-H2-1794247200"
  ],
  "facteur_volume": 1.0000000000000078,
- "derniere_verification": "2026-11-10 03:52 UTC",
+ "derniere_verification": "2026-11-10 04:07 UTC",
  "source": "Coinalyze · Binance perp",
  "telegram_ok": true
 }
