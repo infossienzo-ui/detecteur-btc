@@ -312,8 +312,15 @@ tr.titre td { font-weight: 600; background: var(--panel-2); }
 <script>
 "use strict";
 const LWC = window.LightweightCharts;
-const NOM_TF = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H2: "2h", H3: "3h", H4: "4h", H5: "5h", H6: "6h", H8: "8h", H12: "12h", D: "D" };
-const DUREE = { M1: 60, M5: 300, M15: 900, M30: 1800, H1: 3600, H2: 7200, H3: 10800, H4: 14400, H5: 18000, H6: 21600, H8: 28800, H12: 43200, D: 86400 };
+const NOM_TF = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H2: "2h", H3: "3h", H4: "4h", H5: "5h", H6: "6h", H8: "8h", H12: "12h", D: "D",
+                 J2: "2D", J3: "3D", J4: "4D", J5: "5D", J10: "10D", S1: "1W", S2: "2W", S3: "3W", MO: "1M" };
+const DUREE = { M1: 60, M5: 300, M15: 900, M30: 1800, H1: 3600, H2: 7200, H3: 10800, H4: 14400, H5: 18000, H6: 21600, H8: 28800, H12: 43200, D: 86400,
+                J2: 172800, J3: 259200, J4: 345600, J5: 432000, J10: 864000, S1: 604800, S2: 1209600, S3: 1814400, MO: 2629800 };
+// Graphique seulement (la détection ne les utilise pas) : reconstruits dans la page à partir des bougies D.
+const TF_LONGS = ["J2", "J3", "J4", "J5", "J10", "S1", "S2", "S3", "MO"];
+// Profil de volume de ces timeframes : environ 75 bougies, comme le D de ton outil (75 j)
+const PROFIL_LONGS = { J2: 150, J3: 225, J4: 300, J5: 375, J10: 750, S1: 525, S2: 1050, S3: 1500, MO: 1500 };
+const joursProfil = tf => D.config.profil.jours[tf] ?? PROFIL_LONGS[tf];
 const tfn = tf => NOM_TF[tf] || tf;
 const NOMS_STRAT = { 1: "Continuation", 2: "Retournement" };
 const CALQUES = [["zones", "Zones de l'alerte"], ["fibo", "Fibo"], ["fvg", "FVG"], ["structure", "BOS / sweep"], ["declencheurs", "Déclencheurs"], ["toutes", "Toutes les alertes"], ["moi", "Mes niveaux"], ["ema", "EMA 8/21/50/200"], ["volume", "Volume"], ["rsi", "RSI"]];
@@ -670,8 +677,11 @@ const BN = {
   spot: { nom: "Binance spot", rest: "https://data-api.binance.vision/api/v3/klines", max: 1000,
           ws: ["wss://data-stream.binance.vision/stream?streams=", "wss://data-stream.binance.vision/ws/", "wss://stream.binance.com:9443/ws/"] },
 };
-const INTERVALLE = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H2: "2h", H3: "1h", H4: "4h", H5: "1h", H6: "6h", H8: "8h", H12: "12h", D: "1d" };
-const AGREGE = new Set(["H3", "H5"]);                 // pas de bougies 3h ni 5h chez Binance : reconstruites depuis le 1h
+const INTERVALLE = { M1: "1m", M5: "5m", M15: "15m", M30: "30m", H1: "1h", H2: "2h", H3: "1h", H4: "4h", H5: "1h", H6: "6h", H8: "8h", H12: "12h", D: "1d",
+                     J2: "1d", J3: "1d", J4: "1d", J5: "1d", J10: "1d", S1: "1d", S2: "1d", S3: "1d", MO: "1d" };
+// 3h et 5h : reconstruites depuis le 1h ; 2D à 1M : depuis le D (mêmes bougies que Binance pour 3D, 1W et 1M)
+const AGREGE = new Set(["H3", "H5", ...TF_LONGS]);
+const pasBase = tf => INTERVALLE[tf] === "1d" ? 86400 : 3600;
 const PETITS = new Set(["M1", "M5", "M15", "M30"]);   // en direct, uniquement les bougies perp (les fichiers sont parfois en spot)
 const DIRECT = { ws: null, minuterie: null, essais: 0, dernier: 0, prix: null, etat: "connexion", erreur: "", perpKo: 0, rattraper: false,
                  adresse: { perp: 0, spot: 0 }, releve: 0, releveEnCours: false };
@@ -700,6 +710,12 @@ async function klinesDirect(intervalle, debut, source, limite) {
 }
 function seau(tf, t) {
   if (tf === "H3") return t - t % 10800;
+  if (tf === "MO") { const d = new Date(t * 1000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000; }   // mois civil (UTC)
+  if (tf[0] === "J") { const n = +tf.slice(1), j = Math.floor(t / 86400); return (j - j % n) * 86400; }   // n jours depuis le 01/01/1970
+  if (tf[0] === "S") {   // semaines du lundi 00:00 UTC (comme Binance), groupées par n depuis le lundi 05/01/1970
+    const n = +tf.slice(1), w = Math.floor((Math.floor(t / 86400) - 4) / 7);
+    return (4 + (w - (w % n + n) % n) * 7) * 86400;
+  }
   const j = t - t % 86400;   // 5h : 00, 05, 10, 15 et 20 h UTC chaque jour (la dernière dure 4 h), comme le détecteur
   return j + Math.floor((t - j) / 18000) * 18000;
 }
@@ -760,7 +776,7 @@ async function rattraper(tf) {
   // bougies manquées (flux coupé, onglet en veille, retour sur ce timeframe) : relues chez Binance
   const d = cacheTF[tf];
   if (!d || !d.direct) return;
-  const der = d.lignes[d.lignes.length - 1][0], pas = AGREGE.has(tf) ? 3600 : DUREE[tf], debut = AGREGE.has(tf) ? seau(tf, der) : der;
+  const der = d.lignes[d.lignes.length - 1][0], pas = AGREGE.has(tf) ? pasBase(tf) : DUREE[tf], debut = AGREGE.has(tf) ? seau(tf, der) : der;
   const manque = Math.ceil((Date.now() / 1000 - debut) / pas) + 2;
   if (manque > BN[d.source].max - 20) { cacheTF[tf] = await construireDirect(tf, d.stat); return; }
   const { barres } = await klinesDirect(INTERVALLE[tf], debut, d.source, manque + 3);
@@ -775,7 +791,7 @@ function recevoir(tf, m) {
   let b = [Math.round(k.t / 1000), +k.o, +k.h, +k.l, +k.c, +k.v];
   DIRECT.prix = b[4]; DIRECT.dernier = Date.now();
   if (AGREGE.has(tf)) {
-    // bougie 3h ou 5h en cours = les bougies 1h de son seau, dont celle qui vient d'arriver
+    // bougie en cours = les bougies de base (1h ou D) de son seau, dont celle qui vient d'arriver
     const s = seau(tf, b[0]);
     const h = (d.h1 || []).filter(r => seau(tf, r[0]) === s && r[0] !== b[0]).concat([b]).sort((u, v) => u[0] - v[0]);
     d.h1 = h;
@@ -886,13 +902,21 @@ async function chargerStatique(tf) {
   if (!r.ok) throw new Error(`bougies ${tfn(tf)} : ${r.status}`);
   return r.json();
 }
+async function statiqueDepuisD(tf) {
+  // 2D à 1M sans Binance (maquette, ou Binance injoignable) : bougies D du détecteur regroupées
+  const dj = cacheTF.D && !cacheTF.D.direct ? cacheTF.D : (cacheTF.D && cacheTF.D.stat) || await chargerStatique("D");
+  const ne = D.config.general.emas.length;
+  const d = { tf, lignes: agregerH(tf, dj.lignes.map(r => r.slice(0, 6))).map(r => r.concat(new Array(ne + 1).fill(null))) };
+  calculerIndicateurs(d, 0);
+  return { tf, lignes: d.lignes };
+}
 async function chargerTF(tf) {
   // en ligne : bougies du détecteur + bougies Binance en direct ; si Binance ne répond pas, bougies du détecteur seules
   const c = cacheTF[tf];
   if (c && c.direct) { try { await rattraper(tf); } catch (e) { /* le flux prendra le relais */ } return cacheTF[tf]; }
   if (c && !directPossible()) return c;
   let stat = c || null, err = null;
-  if (!stat) { try { stat = await chargerStatique(tf); } catch (e) { err = e; } }
+  if (!stat) { try { stat = TF_LONGS.includes(tf) ? await statiqueDepuisD(tf) : await chargerStatique(tf); } catch (e) { err = e; } }
   if (directPossible()) {
     try { cacheTF[tf] = await construireDirect(tf, stat); DIRECT.erreur = ""; return cacheTF[tf]; }
     catch (e) { DIRECT.erreur = e.message; }
@@ -1351,7 +1375,7 @@ function dessiner() {
   }
   // profil de volume : comme ton outil (fin du graphique) ou au moment de l'alerte
   if (etat.profil !== "aucun" && rows.length) {
-    const jours = D.config.profil.jours[etat.tf];
+    const jours = joursProfil(etat.tf);
     if (jours) {
       const iFin = etat.profil === "alerte" ? indexDe(tA) : rows.length - 1;
       const p = profilJS(iFin, jours);
@@ -1364,7 +1388,8 @@ function dessiner() {
 }
 function marqueurs() {
   // toutes les alertes visibles avec les filtres (petits repères) + l'alerte ouverte (repère légendé)
-  const liste = etat.calques.toutes ? visibles() : (etat.a ? [etat.a] : []);
+  // de 2D à 1M, des dizaines d'alertes tombent dans la même bougie : seule l'alerte ouverte est repérée
+  const liste = etat.calques.toutes && !TF_LONGS.includes(etat.tf) ? visibles() : (etat.a ? [etat.a] : []);
   marqueursParTemps = new Map();
   const m = [];
   if (!temps.length) { serie.setMarkers([]); return; }
@@ -1618,7 +1643,7 @@ function choisir(id, recentrer = true) {
   if (tf !== etat.tf || !rows.length) choisirTF(tf, true); else { dessiner(); if (recentrer) centrer(); }
 }
 function boutonsTF() {
-  document.getElementById("tfs").innerHTML = D.meta.tf_affichage.map(tf => `<button data-tf="${tf}" aria-pressed="${tf === etat.tf}" class="${tfAbsent(tf) ? "absent" : ""}" title="${tfAbsent(tf) ? "Pas de données dans la maquette" : ""}">${tfn(tf)}</button>`).join("");
+  document.getElementById("tfs").innerHTML = [...new Set(D.meta.tf_affichage.concat(TF_LONGS))].map(tf => `<button data-tf="${tf}" aria-pressed="${tf === etat.tf}" class="${tfAbsent(tf) ? "absent" : ""}" title="${tfAbsent(tf) ? "Pas de données dans la maquette" : ""}">${tfn(tf)}</button>`).join("");
 }
 function vue(nom) {
   for (const v of ["alertes", "frequence", "parametres"]) {
