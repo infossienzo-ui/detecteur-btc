@@ -59,8 +59,8 @@
   "S2-L-H2-1795521600",
   "S2-L-H4-1794931200"
  ],
- "facteur_volume": 0.9999999999999948,
- "derniere_verification": "2026-11-26 09:07 UTC",
+ "facteur_volume": 0.999999999999995,
+ "derniere_verification": "2026-11-26 09:22 UTC",
  "source": "Coinalyze · Binance perp",
  "telegram_ok": true
 }
